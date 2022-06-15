@@ -6,7 +6,7 @@ function initComponents(compartmentId, projectId) {
     $.getJSON("/projects/" + ocid + "?endpoint=" + serviceEndpoint, function(data) {
       var projectSelector = $("#projects");
       projectSelector.empty();
-      console.log(projectId);
+      console.log("Project OCID: " + projectId);
       if (projectId == "None" || projectId == "all") {
         projectSelector.append('<option value="" selected="selected">Select Project</option>');
       }
@@ -25,7 +25,8 @@ function initComponents(compartmentId, projectId) {
   $("#projects").change(function() {
     projectId = $("#projects").val();
     compartmentId = $("#compartments").val();
-    window.location.href = "/" + compartmentId + "/" + projectId + window.location.search;
+    dashUrl = $("#dashboard-url").text();
+    window.location.href = "/" + dashUrl + "/" + compartmentId + "/" + projectId + window.location.search;
   });
 }
 
@@ -159,3 +160,38 @@ function loadJobRuns(job_ocid) {
     // Add a random number to the time interval so that not all requests are send at the same time.
   }, (30 + Math.floor(Math.random() * 5)) * 1000);
 }
+
+function loadPipelines(compartmentId, projectId) {
+  var limit = $("#item-number-limit").text();
+  var existing = $("#dashboard-main .accordion-item .resource-ocid").map(function () {
+    return $(this).text();
+  }).get();
+  var serviceEndpoint = $("#service-endpoint").text();
+  var apiEndpoint = "/pipelines/" + compartmentId + "/" + projectId + "?limit=" + limit + "&endpoint=" + serviceEndpoint;
+
+  $.getJSON(apiEndpoint, function (data) {
+    var timestampDiv = $("#dashboard-main").find(".resource-timestamp:first");
+    var timestamp = 0;
+    var items = data.pipelines;
+    if (timestampDiv.length !== 0) {
+      timestamp = parseFloat(timestampDiv.text())
+      items = items.reverse();
+    }
+    items.forEach(item => {
+      if (existing.indexOf(item.ocid) < 0 && item.time_created > timestamp) {
+        console.log("Loading pipeline: " + item.ocid);
+        if (timestamp > 0) {
+          $("#dashboard-main").prepend(item.html);
+        } else {
+          $("#dashboard-main").append(item.html);
+        }
+        // loadJobRuns(item.ocid);
+      }
+    });
+  });
+  // Reload the list of jobs every 20 seconds.
+  // setTimeout(function () {
+  //   loadPipelines(compartmentId, projectId);
+  // }, 20000);
+}
+

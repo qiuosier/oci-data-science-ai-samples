@@ -19,6 +19,7 @@
     <h1>Jobs Monitor</h1>
     <p>Select compartment and project to show the most recent <span id="job-number-limit">{{ limit }}</span> jobs.</p>
     <div class="d-none" id="service-endpoint">{{ service_endpoint if service_endpoint }}</div>
+    <div class="d-none" id="dashboard-url">dashboard/pipeline</div>
     {% if service_endpoint %}
     <p class="text-danger">Service Endpoint: {{ service_endpoint }}</p>
     {% endif %}

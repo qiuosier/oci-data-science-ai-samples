@@ -8,6 +8,8 @@ from flask import Flask, render_template, jsonify, abort, request
 from ads.common.oci_resource import OCIResource
 from ads.common.oci_datascience import OCIDataScienceMixin
 from ads.jobs import Job, DataScienceJobRun
+from ads.pipeline.ads_pipeline import Pipeline
+from ads.pipeline.data_science_pipeline_run import PipelineRun, PipelineRunStepsStatus
 
 
 OCI_KEY_CONFIG_LOCATION = os.environ.get("OCI_KEY_LOCATION", "~/.oci/config")
@@ -266,4 +268,60 @@ def delete_job(job_ocid):
     return jsonify({
         "ocid": job_ocid,
         "error": error
+    })
+
+
+@app.route("/dashboard/pipeline")
+@app.route("/dashboard/pipeline/<compartment_id>/<project_id>")
+def pipeline_monitor(compartment_id=None, project_id=None):
+    if project_id == "favicon.ico":
+        abort(404)
+
+    context = init_components(compartment_id, project_id)
+    return render_template(
+        'pipeline_dashboard.html',
+        **context
+    )
+
+@app.route("/pipelines/<compartment_id>/<project_id>")
+def list_pipelines(compartment_id, project_id):
+    compartment_id, project_id = check_compartment_project(compartment_id, project_id)
+    limit = check_limit()
+    endpoint = check_endpoint()
+
+    client = oci.data_science.DataScienceClient(
+        service_endpoint=endpoint,
+        **get_authentication()
+    )
+    items = client.list_pipelines(
+        compartment_id=compartment_id,
+        project_id=project_id,
+        lifecycle_state="ACTIVE",
+        sort_by="timeCreated",
+        sort_order="DESC",
+        limit=int(limit) + 5
+    ).data[:int(limit)]
+
+    data_list = []
+    for item in items:
+        # runs = [
+        #     PipelineRunStepsStatus(PipelineRun.from_ocid(run.id)) 
+        #     for run in client.list_pipeline_runs(compartment_id=compartment_id, pipeline_id=item.id).data
+        # ]
+        data = dict(
+            name=item.display_name,
+            id=item.id,
+            ocid=item.id,
+            time_created=item.time_created.timestamp(),
+            html=render_template(
+                "pipeline_template.html",
+                item=item,
+                pipeline=Pipeline.from_ocid(item.id),
+                # runs=runs
+            ),
+        )
+        data_list.append(data)
+    return jsonify({
+        "limit": limit,
+        "pipelines": data_list
     })
