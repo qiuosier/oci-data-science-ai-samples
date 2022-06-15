@@ -1,0 +1,16 @@
+<div class="accordion-item" id="{{ item.id|replace('.', '') }}">
+  <h2 class="accordion-header">
+    <button class="accordion-button" type="button" data-bs-toggle="collapse"
+      data-bs-target="#{{ item.id|replace('.', '') }}-body">
+      {{ item.display_name }}
+    </button>
+    <div class="d-none resource-ocid">{{ item.id }}</div>
+    <div class="d-none resource-timestamp">{{ item.time_created.timestamp() }}</div>
+  </h2>
+  <div id="{{ item.id|replace('.', '') }}-body" class="accordion-collapse collapse show">
+    <div class="accordion-body">
+      <div class="row">
+      </div>
+    </div>
+  </div>
+</div>
