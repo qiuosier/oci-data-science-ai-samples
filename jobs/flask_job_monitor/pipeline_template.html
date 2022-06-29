@@ -14,11 +14,11 @@
       <hr>
       <div class="row">
         <div class="col-xxl-4" id="{{ item.id|replace('.', '') }}-graph">
-          {{ pipeline.graph()|safe }}
+          {{ pipeline.graph_to_svg().decode()|safe }}
         </div>
         {% for run in runs %}
         <div class="col-xxl-4">
-          {{ run.graph()|safe }}
+          {{ run.status.graph_to_svg().decode()|safe }}
         </div>
         {% endfor %}
       </div>
