@@ -9,7 +9,7 @@ from ads.common.oci_resource import OCIResource
 from ads.common.oci_datascience import OCIDataScienceMixin
 from ads.jobs import Job, DataScienceJobRun
 from ads.pipeline.ads_pipeline import Pipeline
-from ads.pipeline.data_science_pipeline_run import PipelineRun, PipelineRunStepsStatus
+from ads.pipeline.ads_pipeline_run import PipelineRun, PipelineRunStepsStatus
 
 
 OCI_KEY_CONFIG_LOCATION = os.environ.get("OCI_KEY_LOCATION", "~/.oci/config")
@@ -304,10 +304,10 @@ def list_pipelines(compartment_id, project_id):
 
     data_list = []
     for item in items:
-        # runs = [
-        #     PipelineRunStepsStatus(PipelineRun.from_ocid(run.id)) 
-        #     for run in client.list_pipeline_runs(compartment_id=compartment_id, pipeline_id=item.id).data
-        # ]
+        runs = [
+            PipelineRun.from_ocid(run.id)
+            for run in client.list_pipeline_runs(compartment_id=compartment_id, pipeline_id=item.id).data
+        ]
         data = dict(
             name=item.display_name,
             id=item.id,
@@ -317,7 +317,7 @@ def list_pipelines(compartment_id, project_id):
                 "pipeline_template.html",
                 item=item,
                 pipeline=Pipeline.from_ocid(item.id),
-                # runs=runs
+                runs=runs
             ),
         )
         data_list.append(data)
