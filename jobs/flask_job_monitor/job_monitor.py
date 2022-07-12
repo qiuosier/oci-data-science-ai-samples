@@ -1,13 +1,15 @@
 import os
 import re
+import urllib.parse
 import ads
 import oci
 import requests
-
+import yaml
 from flask import Flask, render_template, jsonify, abort, request
 from ads.common.oci_resource import OCIResource
 from ads.common.oci_datascience import OCIDataScienceMixin
 from ads.jobs import Job, DataScienceJobRun
+from ads.opctl.cmds import run as opctl_run
 from ads.pipeline.ads_pipeline import Pipeline
 from ads.pipeline.ads_pipeline_run import PipelineRun, PipelineRunStepsStatus
 
@@ -271,6 +273,26 @@ def delete_job(job_ocid):
     })
 
 
+@app.route("/download/<path:url>")
+def download_from_url(url):
+    res = requests.get(url)
+    return res.content
+
+
+@app.route("/run", methods=["POST"])
+def run():
+    try:
+        data = yaml.safe_load(urllib.parse.unquote(request.data[5:].decode()))
+    except Exception as ex:
+        import traceback
+        traceback.print_exc()
+        abort(400, str(ex))
+    opctl_run(data)
+    return jsonify({
+
+    })
+
+
 @app.route("/dashboard/pipeline")
 @app.route("/dashboard/pipeline/<compartment_id>/<project_id>")
 def pipeline_monitor(compartment_id=None, project_id=None):
@@ -282,6 +304,7 @@ def pipeline_monitor(compartment_id=None, project_id=None):
         'pipeline_dashboard.html',
         **context
     )
+
 
 @app.route("/pipelines/<compartment_id>/<project_id>")
 def list_pipelines(compartment_id, project_id):
