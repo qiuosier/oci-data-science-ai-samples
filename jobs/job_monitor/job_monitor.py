@@ -227,14 +227,18 @@ def init_components(compartment_id, project_id):
         compartment_id = None
 
     auth = get_authentication()
-    if auth["config"]:
-        if "override_tenancy" in auth["config"]:
-            tenancy_id = auth["config"]["override_tenancy"]
+    tenancy_id = request.args.get("t", 10)
+    if not tenancy_id:
+        if auth["config"]:
+            if "TENANCY_OCID" in os.environ:
+                tenancy_id = os.environ["TENANCY_OCID"]
+            elif "override_tenancy" in auth["config"]:
+                tenancy_id = auth["config"]["override_tenancy"]
+            else:
+                tenancy_id = auth["config"]["tenancy"]
         else:
-            tenancy_id = auth["config"]["tenancy"]
-    else:
-        tenancy_id = auth["signer"].tenancy_id
-    logger.debug(f"Tenancy ID: {tenancy_id}")
+            tenancy_id = getattr(auth["signer"], "tenancy_id", None)
+    logger.debug("Tenancy ID: %s", tenancy_id)
     client = oci.identity.IdentityClient(**auth)
     compartments = []
     # User may not have permissions to list compartment.
