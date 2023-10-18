@@ -121,6 +121,9 @@ function loadJobs(compartmentId, projectId) {
   var apiEndpoint = "/jobs/" + compartmentId + "/" + projectId + "?limit=" + limit + "&endpoint=" + serviceEndpoint;
 
   $.getJSON(apiEndpoint, function (data) {
+    if (data.error !== null) {
+      toastMessage(data.error, data.message);
+    }
     var timestampDiv = $("#dashboard-jobs").find(".job-timestamp:first");
     var timestamp = 0;
     var jobs = data.jobs;
@@ -153,7 +156,6 @@ function loadJobs(compartmentId, projectId) {
         $('#' + job.ocid.replaceAll(".", "")).on('shown.bs.collapse', function () {
           loadJobRuns(job.ocid);
         })
-
       }
     });
     // Open the first accordion in the page

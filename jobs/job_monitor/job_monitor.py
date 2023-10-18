@@ -319,7 +319,9 @@ def list_jobs(compartment_id, project_id):
             .data[: int(limit)]
         )
     except oci.exceptions.ServiceError as ex:
-        return jsonify({"limit": limit, "jobs": job_list, "error": ex.code})
+        return jsonify(
+            {"limit": limit, "jobs": job_list, "error": ex.code, "message": ex.message}
+        )
 
     for job in jobs:
         job_data = dict(
