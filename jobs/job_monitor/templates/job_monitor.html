@@ -30,10 +30,16 @@
       {% include 'run_workflow.html' %}
     </div>
     <p>Select compartment and project to show the most recent <span id="job-number-limit">{{ limit }}</span> jobs.</p>
-
     <div class="d-none" id="service-endpoint">{{ service_endpoint if service_endpoint }}</div>
     {% if service_endpoint %}
     <p class="text-danger">Service Endpoint: {{ service_endpoint }}</p>
+    {% endif %}
+    {% if error %}
+    <div class="alert alert-danger" role="alert">
+      {{ error }}
+      <button class="float-end btn-small btn-primary" onclick="authenticate_with_token()">Re-Generate Session
+        Token</button>
+    </div>
     {% endif %}
     <div class="row">
       <div class="col-md-6">

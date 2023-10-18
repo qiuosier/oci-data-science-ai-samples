@@ -377,3 +377,13 @@ function metricDropdownClicked(element) {
     chart.update();
   });
 }
+
+function authenticate_with_token() {
+  $.getJSON("/authenticate/token", function (data) {
+    if (data.error === null) {
+      location.reload();
+    } else {
+      toastMessage("Error", data.error);
+    }
+  });
+}

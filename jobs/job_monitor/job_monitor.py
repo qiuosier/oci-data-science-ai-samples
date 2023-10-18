@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import subprocess
 import traceback
 import urllib.parse
 
@@ -105,11 +106,18 @@ def get_authentication():
         When no authentication method is available.
     """
     if os.path.exists(os.path.expanduser(OCI_KEY_CONFIG_LOCATION)):
-        oci_auth = dict(
-            config=oci.config.from_file(
-                file_location=OCI_KEY_CONFIG_LOCATION, profile_name=OCI_KEY_PROFILE_NAME
-            )
+        oci_config = oci.config.from_file(
+            file_location=OCI_KEY_CONFIG_LOCATION, profile_name=OCI_KEY_PROFILE_NAME
         )
+        if "security_token_file" in oci_config and "key_file" in oci_config:
+            token_file = oci_config["security_token_file"]
+            with open(token_file, "r", encoding="utf-8") as f:
+                token = f.read()
+            private_key = oci.signer.load_private_key_from_file(oci_config["key_file"])
+            signer = oci.auth.signers.SecurityTokenSigner(token, private_key)
+            oci_auth = {"config": oci_config, "signer": signer}
+        else:
+            oci_auth = {"config": oci_config}
     elif (
         oci.auth.signers.resource_principals_signer.OCI_RESOURCE_PRINCIPAL_VERSION
         in os.environ
@@ -123,6 +131,7 @@ def get_authentication():
         oci_auth = dict(config=oci_config, signer=signer)
     else:
         raise EnvironmentError("Cannot determine authentication method.")
+    ads.set_auth(**oci_auth)
     return oci_auth
 
 
@@ -135,23 +144,14 @@ def load_oci_config():
     return oci_config
 
 
-auth = get_authentication()
-if auth["config"]:
-    ads.set_auth(
-        oci_config_location=OCI_KEY_CONFIG_LOCATION, profile=OCI_KEY_PROFILE_NAME
-    )
-else:
-    ads.set_auth(**auth)
-
-
 def check_ocid(ocid):
-    if not re.match(r"ocid[0-9].[a-z]+.oc[0-9].[a-z]{3}.[a-z0-9]+", ocid):
+    if not re.match(r"ocid[0-9].[a-z]+.oc[0-9].[a-z-]+.[a-z0-9]+", ocid):
         abort_with_json_error(404, f"Invalid OCID: {ocid}")
 
 
 def check_project_id(project_id):
     if not re.match(
-        r"ocid[0-9].datascienceproject.oc[0-9].[a-z]{3}.[a-z0-9]+", project_id
+        r"ocid[0-9].datascienceproject.oc[0-9].[a-z-]+.[a-z0-9]+", project_id
     ):
         abort_with_json_error(404, f"Invalid Project OCID: {project_id}")
 
@@ -164,7 +164,7 @@ def check_compartment_id(compartment_id):
 
 
 def is_valid_ocid(resource_type, ocid):
-    if re.match(r"ocid[0-9]." + resource_type + r".oc[0-9].[a-z]{3}.[a-z0-9]+", ocid):
+    if re.match(r"ocid[0-9]." + resource_type + r".oc[0-9].[a-z-]+.[a-z0-9]+", ocid):
         return True
     return False
 
@@ -215,6 +215,19 @@ def list_all_child_compartments(client: oci.identity.IdentityClient, compartment
     return compartments
 
 
+def get_tenancy_ocid(auth):
+    if auth["config"]:
+        if "TENANCY_OCID" in os.environ:
+            tenancy_id = os.environ["TENANCY_OCID"]
+        elif "override_tenancy" in auth["config"]:
+            tenancy_id = auth["config"]["override_tenancy"]
+        else:
+            tenancy_id = auth["config"]["tenancy"]
+    else:
+        tenancy_id = getattr(auth["signer"], "tenancy_id", None)
+    return tenancy_id
+
+
 def init_components(compartment_id, project_id):
     limit = request.args.get("limit", 10)
     endpoint = check_endpoint()
@@ -227,47 +240,36 @@ def init_components(compartment_id, project_id):
         compartment_id = None
 
     auth = get_authentication()
-    tenancy_id = request.args.get("t", 10)
+    tenancy_id = request.args.get("t")
     if not tenancy_id:
-        if auth["config"]:
-            if "TENANCY_OCID" in os.environ:
-                tenancy_id = os.environ["TENANCY_OCID"]
-            elif "override_tenancy" in auth["config"]:
-                tenancy_id = auth["config"]["override_tenancy"]
-            else:
-                tenancy_id = auth["config"]["tenancy"]
-        else:
-            tenancy_id = getattr(auth["signer"], "tenancy_id", None)
+        tenancy_id = get_tenancy_ocid(auth)
     logger.debug("Tenancy ID: %s", tenancy_id)
     client = oci.identity.IdentityClient(**auth)
     compartments = []
+    error = None
     # User may not have permissions to list compartment.
     try:
         compartments.extend(
             list_all_sub_compartments(client, compartment_id=tenancy_id)
         )
-    except Exception as ex:
+    except oci.exceptions.ServiceError:
         traceback.print_exc()
-        logger.error(
-            "ERROR: Unable to list all sub compartment in tenancy %s.", tenancy_id
-        )
+        error = f"ERROR: Unable to list all sub compartment in tenancy {tenancy_id}."
         try:
             compartments.append(
                 list_all_child_compartments(client, compartment_id=tenancy_id)
             )
-        except Exception as ex:
+        except oci.exceptions.ServiceError:
             traceback.print_exc()
-            logger.error(
-                "ERROR: Unable to list all child compartment in tenancy %s.", tenancy_id
+            error = (
+                f"ERROR: Unable to list all child compartment in tenancy {tenancy_id}."
             )
     try:
         root_compartment = client.get_compartment(tenancy_id).data
         compartments.insert(0, root_compartment)
-    except Exception as ex:
+    except oci.exceptions.ServiceError:
         traceback.print_exc()
-        logger.error(
-            "ERROR: Unable to get details of the root compartment %s.", tenancy_id
-        )
+        error = f"ERROR: Unable to get details of the root compartment {tenancy_id}."
         compartments.insert(
             0,
             oci.identity.models.Compartment(
@@ -280,6 +282,7 @@ def init_components(compartment_id, project_id):
         compartments=compartments,
         limit=limit,
         service_endpoint=endpoint,
+        error=error,
     )
     return context
 
@@ -600,6 +603,7 @@ def get_metrics(name, ocid):
                         for p in result.aggregated_datapoints
                     ]
                 )
+
     timestamps = set()
     datasets = []
     for metric in run_metrics:
@@ -636,3 +640,18 @@ def supported_shapes(compartment_ocid):
             "fast_launch_shapes": fast_launch_shapes,
         }
     )
+
+
+@app.route("/authenticate/token")
+def authenticate_with_token():
+    auth = get_authentication()
+    cmd = f"oci session authenticate --profile-name {OCI_KEY_PROFILE_NAME}"
+    region = auth.get("config", {}).get("region")
+    if region:
+        cmd += f" --region {region}"
+    try:
+        subprocess.check_output(cmd, shell=True)
+        error = None
+    except subprocess.CalledProcessError as ex:
+        error = ex.output
+    return jsonify({"error": error})
