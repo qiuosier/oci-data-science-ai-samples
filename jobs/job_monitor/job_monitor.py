@@ -577,17 +577,19 @@ def get_metrics(name, ocid):
     run_metrics = []
     if metric_namespace and job_run.time_started:
         client = oci.monitoring.MonitoringClient(**get_authentication())
-        results = metric_query.get_metric_values(
-            job_run,
-            name,
-            metric_namespace,
-            dimension,
-            client,
-            start=job_run.time_started,
-            end=job_run.time_finished
+        metric_query_args = {
+            "job_run": job_run,
+            "name": name,
+            "namespace": metric_namespace,
+            "ocid_dimension": dimension,
+            "monitoring_client": client,
+            "start": job_run.time_started,
+            "end": job_run.time_finished
             if job_run.time_finished
             else datetime.datetime.now(datetime.timezone.utc),
-        )
+        }
+        results = metric_query.get_metric_values(**metric_query_args)
+
         if results:
             for result in results:
                 run_metrics.append(

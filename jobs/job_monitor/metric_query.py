@@ -55,6 +55,7 @@ def get_metric_values(
     monitoring_client: oci.monitoring.MonitoringClient,
     start: datetime.datetime = None,
     end: datetime.datetime = None,
+    statistic: str = "mean",
 ) -> list:
     """
     Gets the metric values for the specified metric in the given time interval
@@ -100,7 +101,7 @@ def get_metric_values(
         summarize_metrics_data_details=oci.monitoring.models.SummarizeMetricsDataDetails(
             namespace=namespace,
             resolution=resolution,
-            query=f'{name}[{resolution}]{{{ocid_dimension} = "{job_run.id}"}}.mean()',
+            query=f'{name}[{resolution}]{{{ocid_dimension} = "{job_run.id}"}}.{statistic}()',
             start_time=start,
             end_time=end,
         ),
