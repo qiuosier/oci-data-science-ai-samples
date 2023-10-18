@@ -300,24 +300,27 @@ def list_jobs(compartment_id, project_id):
     compartment_id, project_id = check_compartment_project(compartment_id, project_id)
     limit = check_limit()
     endpoint = check_endpoint()
-
-    # Calling OCI API here instead of ADS API is faster :)
-    jobs = (
-        oci.data_science.DataScienceClient(
-            service_endpoint=endpoint, **get_authentication()
-        )
-        .list_jobs(
-            compartment_id=compartment_id,
-            project_id=project_id,
-            lifecycle_state="ACTIVE",
-            sort_by="timeCreated",
-            sort_order="DESC",
-            limit=int(limit) + 5,
-        )
-        .data[: int(limit)]
-    )
-
     job_list = []
+
+    try:
+        # Calling OCI API here instead of ADS API is faster :)
+        jobs = (
+            oci.data_science.DataScienceClient(
+                service_endpoint=endpoint, **get_authentication()
+            )
+            .list_jobs(
+                compartment_id=compartment_id,
+                project_id=project_id,
+                lifecycle_state="ACTIVE",
+                sort_by="timeCreated",
+                sort_order="DESC",
+                limit=int(limit) + 5,
+            )
+            .data[: int(limit)]
+        )
+    except oci.exceptions.ServiceError as ex:
+        return jsonify({"limit": limit, "jobs": job_list, "error": ex.code})
+
     for job in jobs:
         job_data = dict(
             name=job.display_name,
@@ -327,7 +330,7 @@ def list_jobs(compartment_id, project_id):
             html=render_template("job_accordion.html", job=job),
         )
         job_list.append(job_data)
-    return jsonify({"limit": limit, "jobs": job_list})
+    return jsonify({"limit": limit, "jobs": job_list, "error": None})
 
 
 @app.route("/job_runs/<job_id>")
