@@ -654,4 +654,4 @@ def authenticate_with_token():
         error = None
     except subprocess.CalledProcessError as ex:
         error = ex.output
-    return jsonify({"error": error})
+    return jsonify({"error": str(error)})
