@@ -2,7 +2,8 @@
 
 Incubator project to augment the OCI console with useful functionality to support development of Data Science Jobs.
 
-This job monitor is a Python Flask app build on top of [Oracle ADS](https://docs.oracle.com/en-us/iaas/tools/ads-sdk/latest/index.html). It allows users to monitor the status and outputs of OCI data science job runs.
+This job monitor is a Python Flask app build on top of [Oracle ADS](https://docs.oracle.com/en-us/iaas/tools/ads-sdk/latest/index.html).
+It allows users to monitor the status and outputs of OCI data science job runs.
 
 ![Job Monitor UI](assets/images/job_monitor.png)
 
@@ -22,49 +23,43 @@ Features:
 
 ### Requirements
 
-This tool requires `oci>=2.45.1` and `oracle-ads>=2.4.2`.
+This tool requires `oci>=2.45.1` and `oracle-ads>=2.9.0`.
 
 ```bash
 pip install oci oracle-ads flask --upgrade
 ```
 
-This tool uses OCI API key for authentication. The `DEFAULT` profile in the API key will be used.
-
 ### Command Line
 
+This tool uses OCI API key for authentication. The `DEFAULT` profile in the API key will be used.
+If you would like to use a different profile, you can specify it with the `OCI_KEY_PROFILE` environment variable
 To start the Flask app, simply run the following command and open <http://127.0.0.1:5000/> with your browser.
 
 ```bash
-OCI_PYTHON_SDK_NO_SERVICE_IMPORTS=1 FLASK_APP=job_monitor flask run
+FLASK_APP=job_monitor flask run
 ```
 
-The dropdown options for selecting compartment ID and project ID does not support tenancy override (e.g. ociodsccust) at the moment. For that, you will need to specify the compartment ID and project ID in the URL:
+To change the profile and the location of the OCI KEY use following environment variables in the command line:
+* `OCI_KEY_PROFILE="DEFAULT"`
+* `OCI_KEY_LOCATION="~/.oci/config"`
+
+
+```bash
+FLASK_APP=job_monitor OCI_KEY_PROFILE=PROFILE_NAME flask run
+```
+
+The dropdown options for selecting compartment and project only show the ones in the default tenancy. If you need to override the tenancy, you can specify the in environment variable.
+
+```bash
+FLASK_APP=job_monitor OCI_KEY_PROFILE=PROFILE_NAME TENANCY_OCID=ocid1.xxx flask run
+```
+
+Alternatively, you can specify the compartment OCID and project OCID in the URL:
 
 ```bash
 http://127.0.0.1:5000/<COMPARTMENT_OCID>/<PROJECT_OCID>
 ```
 
-> To change the profile and the location of the OCI KEY use following environment variables in the command line:
-> OCI_KEY_PROFILE="DEFAULT"
-> OCI_KEY_PROFILE="~/.oci/config"
-
-Example:
-
-```bash
-OCI_PYTHON_SDK_NO_SERVICE_IMPORTS=1 OCI_KEY_PROFILE="DEFAULT" FLASK_APP=job_monitor flask run
-```
-
-To override tenancy, you can add the `override_tenancy` key to your OCI API key profile. For example:
-
-```ini
-[DEFAULT]
-user=ocid1.user.oc1..xxxxx
-fingerprint=xxxxx
-tenancy=ocid1.tenancy.oc1..xxxxx
-region=us-ashburn-1
-key_file=~/.oci/oci_api_key.pem
-override_tenancy=ocid1.tenancy.oc1..yyyyy
-```
 
 ### VS Code Launch Config
 
@@ -79,8 +74,6 @@ The following config can be used in the VS Code `launch.json` to launch the Flas
     "env": {
         "FLASK_APP": "job_monitor.py",
         "FLASK_ENV": "development",
-        "OCI_PYTHON_SDK_NO_SERVICE_IMPORTS": "1",
-        // "RECORDING": "1",
         // OCI_KEY_PROFILE="DEFAULT",
         // OCI_KEY_PROFILE="~/.oci/config"
     },
