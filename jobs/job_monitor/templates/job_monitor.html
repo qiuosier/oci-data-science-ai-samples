@@ -37,10 +37,14 @@
     {% if error %}
     <div class="alert alert-danger" role="alert">
       {{ error }}
-      <button class="float-end btn-small btn-primary" onclick="authenticate_with_token()">Re-Generate Session
-        Token</button>
     </div>
     {% endif %}
+    <div id="alert-authentication" class="alert alert-danger d-none" role="alert">
+      Authentication Error - <span></span>
+      <button class="float-end btn btn-small btn-primary" onclick="authenticate_with_token()">
+        Re-Generate Session Token
+      </button>
+    </div>
     <div class="row">
       <div class="col-md-6">
         <div class="form-group">

@@ -7,33 +7,60 @@ const LOG_CHECKING_INTERVAL = 20000;
 const RUN_CHECKING_INTERVAL = 30000;
 var jobRunChecking = {};
 
+// This function is use to check if the authentication is done.
+function checkCompartments() {
+  $.getJSON("/compartments", function (data) {
+    if (data.error == null) {
+      // Refresh the page to load the list of compartments.
+      document.location.reload();
+    } else {
+      // Check again in a few seconds.
+      setTimeout(function () {
+        checkCompartments();
+      }, 10000);
+    };
+  })
+}
+
 function initComponents(compartmentId, projectId) {
+  var compartmentDropdown = $("#compartments");
+  var projectDropdown = $("#projects");
+
+  // There is an authentication issue in this case
+  if (compartmentDropdown.length === 1 &&
+    projectDropdown.length === 1 &&
+    compartmentDropdown.val() === null &&
+    projectDropdown.val() === null
+  ) {
+    $("#alert-authentication").removeClass("d-none").find("span").text("Unable to load compartments.");
+    checkCompartments();
+  }
+
   // Load the list of project in the compartment.
-  $("#compartments").change(function () {
-    var ocid = $("#compartments").val();
+  compartmentDropdown.change(function () {
+    var ocid = compartmentDropdown.val();
     var serviceEndpoint = $("#service-endpoint").text();
     $.getJSON("/projects/" + ocid + "?endpoint=" + serviceEndpoint, function (data) {
-      var projectSelector = $("#projects");
-      projectSelector.empty();
+      projectDropdown.empty();
       console.log(projectId);
       if (projectId == "None" || projectId == "all") {
-        projectSelector.append('<option value="" selected="selected">Select Project</option>');
+        projectDropdown.append('<option value="" selected="selected">Select Project</option>');
       }
       data.projects.forEach(element => {
         if (element.ocid === projectId) {
-          projectSelector.append('<option value="' + element.ocid + '" selected>' + element.display_name + '</option>');
+          projectDropdown.append('<option value="' + element.ocid + '" selected>' + element.display_name + '</option>');
         } else {
-          projectSelector.append('<option value="' + element.ocid + '">' + element.display_name + '</option>');
+          projectDropdown.append('<option value="' + element.ocid + '">' + element.display_name + '</option>');
         }
       });
     })
   })
   // Trigger the compartment change callback to load the list of projects.
-  if (compartmentId) $("#compartments").change();
+  if (compartmentId) compartmentDropdown.change();
   // Refresh the page to see jobs when project is changed.
-  $("#projects").change(function () {
-    projectId = $("#projects").val();
-    compartmentId = $("#compartments").val();
+  projectDropdown.change(function () {
+    projectId = projectDropdown.val();
+    compartmentId = compartmentDropdown.val();
     window.location.href = "/" + compartmentId + "/" + projectId + window.location.search;
   });
 }
@@ -121,12 +148,11 @@ function loadJobs(compartmentId, projectId) {
   var apiEndpoint = "/jobs/" + compartmentId + "/" + projectId + "?limit=" + limit + "&endpoint=" + serviceEndpoint;
 
   $.getJSON(apiEndpoint, function (data) {
-    if (data.error !== null) {
-      toastMessage(data.error, data.message);
-    }
+    $("#alert-authentication").addClass("d-none");
     var timestampDiv = $("#dashboard-jobs").find(".job-timestamp:first");
     var timestamp = 0;
     var jobs = data.jobs;
+    // No job found
     if (jobs.length === 0) {
       // Wait for the projects dropdown to be populated so that we can get the project name.
       setTimeout(() => {
@@ -167,6 +193,13 @@ function loadJobs(compartmentId, projectId) {
       );
     }
 
+  }).fail(function (jqxhr, textStatus, error) {
+    var data = jqxhr.responseJSON;
+    if (error == "UNAUTHORIZED") {
+      $("#alert-authentication").removeClass("d-none").find("span").text(data.message);
+    } else {
+      toastMessage(data.error, data.message);
+    }
   });
   // Reload the list of jobs every 20 seconds.
   setTimeout(function () {

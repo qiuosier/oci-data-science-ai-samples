@@ -99,10 +99,13 @@
           loadYamlList();
           var editor = initEditor();
 
-          $.get("/shapes/" + $("#compartments").val(), function (data) {
-            $("#collapseSupportedShapes").find(".shape-names").text(data.supported_shapes.join(", "));
-            $("#collapseFastLaunchShapes").find(".shape-names").text(data.fast_launch_shapes.join(", "));
-          })
+          var compartment_id = $("#compartments").val();
+          if (compartment_id != null) {
+            $.get("/shapes/" + $("#compartments").val(), function (data) {
+              $("#collapseSupportedShapes").find(".shape-names").text(data.supported_shapes.join(", "));
+              $("#collapseFastLaunchShapes").find(".shape-names").text(data.fast_launch_shapes.join(", "));
+            })
+          }
 
           $("#load-yaml").click(function () {
             var filename = $("#yaml-selector").val()

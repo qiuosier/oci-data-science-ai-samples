@@ -1,4 +1,5 @@
 import datetime
+import functools
 import json
 import logging
 import os
@@ -71,6 +72,26 @@ app = Flask(
 
 def abort_with_json_error(code, message):
     abort(make_response(jsonify(error=message), code))
+
+
+def handle_service_exception(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except oci.exceptions.ServiceError as ex:
+            return make_response(
+                jsonify(
+                    {
+                        "error": ex.code,
+                        "message": ex.message,
+                    }
+                ),
+                ex.status,
+            )
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 def instance_principal_available():
@@ -270,12 +291,13 @@ def init_components(compartment_id, project_id):
     except oci.exceptions.ServiceError:
         traceback.print_exc()
         error = f"ERROR: Unable to get details of the root compartment {tenancy_id}."
-        compartments.insert(
-            0,
-            oci.identity.models.Compartment(
-                id=tenancy_id, name=" ** Root - Name N/A **"
-            ),
-        )
+        if compartments:
+            compartments.insert(
+                0,
+                oci.identity.models.Compartment(
+                    id=tenancy_id, name=" ** Root - Name N/A **"
+                ),
+            )
     context = dict(
         compartment_id=compartment_id,
         project_id=project_id,
@@ -298,33 +320,36 @@ def job_monitor(compartment_id=None, project_id=None):
     return render_template("job_monitor.html", **context)
 
 
+@app.route("/compartments")
+def list_compartments():
+    context = init_components(compartment_id=None, project_id=None)
+    compartments = [compartment.id for compartment in context["compartments"]]
+    return jsonify({"compartments": compartments, "error": context["error"]})
+
+
 @app.route("/jobs/<compartment_id>/<project_id>")
+@handle_service_exception
 def list_jobs(compartment_id, project_id):
     compartment_id, project_id = check_compartment_project(compartment_id, project_id)
     limit = check_limit()
     endpoint = check_endpoint()
     job_list = []
 
-    try:
-        # Calling OCI API here instead of ADS API is faster :)
-        jobs = (
-            oci.data_science.DataScienceClient(
-                service_endpoint=endpoint, **get_authentication()
-            )
-            .list_jobs(
-                compartment_id=compartment_id,
-                project_id=project_id,
-                lifecycle_state="ACTIVE",
-                sort_by="timeCreated",
-                sort_order="DESC",
-                limit=int(limit) + 5,
-            )
-            .data[: int(limit)]
+    # Calling OCI API here instead of ADS API is faster :)
+    jobs = (
+        oci.data_science.DataScienceClient(
+            service_endpoint=endpoint, **get_authentication()
         )
-    except oci.exceptions.ServiceError as ex:
-        return jsonify(
-            {"limit": limit, "jobs": job_list, "error": ex.code, "message": ex.message}
+        .list_jobs(
+            compartment_id=compartment_id,
+            project_id=project_id,
+            lifecycle_state="ACTIVE",
+            sort_by="timeCreated",
+            sort_order="DESC",
+            limit=int(limit) + 5,
         )
+        .data[: int(limit)]
+    )
 
     for job in jobs:
         job_data = dict(
@@ -625,6 +650,7 @@ def get_metrics(name, ocid):
 
 
 @app.route("/shapes/<compartment_ocid>")
+@handle_service_exception
 def supported_shapes(compartment_ocid):
     shapes = [
         shape.name
