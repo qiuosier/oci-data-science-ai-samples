@@ -25,12 +25,13 @@ function checkCompartments() {
 function initComponents(compartmentId, projectId) {
   var compartmentDropdown = $("#compartments");
   var projectDropdown = $("#projects");
-
+  console.log(compartmentDropdown.children('option').length);
+  console.log(projectDropdown.children('option').length);
   // There is an authentication issue in this case
-  if (compartmentDropdown.length === 1 &&
-    projectDropdown.length === 1 &&
-    compartmentDropdown.val() === null &&
-    projectDropdown.val() === null
+  if (compartmentDropdown.children('option').length === 1 &&
+    projectDropdown.children('option').length === 0 &&
+    !compartmentDropdown.val() &&
+    !projectDropdown.val()
   ) {
     $("#alert-authentication").removeClass("d-none").find("span").text("Unable to load compartments.");
     checkCompartments();
