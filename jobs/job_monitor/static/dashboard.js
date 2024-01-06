@@ -28,7 +28,7 @@ function initComponents(compartmentId, projectId) {
   console.log(compartmentDropdown.children('option').length);
   console.log(projectDropdown.children('option').length);
   // There is an authentication issue in this case
-  if (compartmentDropdown.children('option').length === 1 &&
+  if (compartmentDropdown.children('option').length <= 1 &&
     projectDropdown.children('option').length === 0 &&
     !compartmentDropdown.val() &&
     !projectDropdown.val()
