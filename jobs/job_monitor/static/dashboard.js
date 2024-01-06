@@ -62,7 +62,10 @@ function initComponents(compartmentId, projectId) {
   projectDropdown.change(function () {
     projectId = projectDropdown.val();
     compartmentId = compartmentDropdown.val();
-    window.location.href = "/" + compartmentId + "/" + projectId + window.location.search;
+    var url = new URL(window.location.href);
+    url.searchParams.set('c', compartmentId);
+    url.searchParams.set('p', projectId);
+    window.location.href = url.toString();
   });
 }
 

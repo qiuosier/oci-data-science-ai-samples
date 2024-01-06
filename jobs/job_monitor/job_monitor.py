@@ -249,7 +249,9 @@ def get_tenancy_ocid(auth):
     return tenancy_id
 
 
-def init_components(compartment_id, project_id):
+def init_components():
+    compartment_id = request.args.get("c")
+    project_id = request.args.get("p")
     limit = request.args.get("limit", 10)
     endpoint = check_endpoint()
 
@@ -308,21 +310,20 @@ def init_components(compartment_id, project_id):
     )
     return context
 
+@app.route("/favicon.ico")
+def favicon():
+    return redirect("https://www.oracle.com/favicon.ico")
+
 
 @app.route("/")
-@app.route("/<project_id>")
-@app.route("/<compartment_id>/<project_id>")
-def job_monitor(compartment_id=None, project_id=None):
-    if project_id == "favicon.ico":
-        return redirect("https://www.oracle.com/favicon.ico")
-
-    context = init_components(compartment_id, project_id)
+def job_monitor():
+    context = init_components()
     return render_template("job_monitor.html", **context)
 
 
 @app.route("/compartments")
 def list_compartments():
-    context = init_components(compartment_id=None, project_id=None)
+    context = init_components()
     compartments = [compartment.id for compartment in context["compartments"]]
     return jsonify({"compartments": compartments, "error": context["error"]})
 
