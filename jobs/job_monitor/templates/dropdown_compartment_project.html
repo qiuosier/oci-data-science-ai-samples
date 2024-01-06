@@ -1,0 +1,34 @@
+<div class="col-md-6">
+  <div class="form-group">
+    <label for="compartments">Compartment</label>
+    <select class="form-control" name="compartments" id="compartments">
+      {% if not compartment_id %}
+      <option value="" selected="selected">Select Compartment</option>
+      {% endif %}
+      {% for compartment in compartments %}
+      {% if compartment_id == compartment.id %}
+      <option value="{{ compartment.id }}" selected="selected">{{ compartment.name }}</option>
+      {% else %}
+      <option value="{{ compartment.id }}">{{ compartment.name }}</option>
+      {% endif %}
+      {% endfor %}
+    </select>
+  </div>
+</div>
+<div class="col-md-6">
+  <div class="d-none" id="project_ocid">{{ project_id }}</div>
+  <div class="form-group">
+    <label for="projects">Project</label>
+    <select class="form-control" name="projects" id="projects">
+    </select>
+  </div>
+</div>
+<script>
+  $(document).ready(function () {
+    var compartmentId = $("#compartments").val();
+    var projectId = $("#project_ocid").text();
+    console.log("COMPARTMENT ID: " + compartmentId);
+    console.log("PROJECT ID: " + projectId);
+    initComponents(compartmentId, projectId)
+  });
+</script>

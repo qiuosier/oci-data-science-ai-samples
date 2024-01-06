@@ -1,0 +1,15 @@
+<div class="d-none" id="service-endpoint">{{ service_endpoint if service_endpoint }}</div>
+{% if service_endpoint %}
+<p class="text-danger">Service Endpoint: {{ service_endpoint }}</p>
+{% endif %}
+{% if error %}
+<div class="alert alert-danger" role="alert">
+  {{ error }}
+</div>
+{% endif %}
+<div id="alert-authentication" class="alert alert-danger d-none" role="alert">
+  Authentication Error - <span></span>
+  <button class="float-end btn btn-small btn-primary" onclick="authenticate_with_token()">
+    Re-Generate Session Token
+  </button>
+</div>
