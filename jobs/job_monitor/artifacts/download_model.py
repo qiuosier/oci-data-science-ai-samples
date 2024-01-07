@@ -8,6 +8,7 @@
 
 Set the HUGGING_FACE_HUB_TOKEN environment variable if it is required to access the model.
 """
+import os
 import sys
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -20,6 +21,7 @@ def download_model(model_name: str, to_dir: str):
         device_map="auto",
         return_dict=True,
         torch_dtype=torch.bfloat16,
+        offload_folder="/home/datascience/offload"
     )
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -36,6 +38,7 @@ def main():
         )
     model_name = sys.argv[1]
     to_dir = sys.argv[2]
+    os.makedirs("/home/datascience/offload", exist_ok=True)
     download_model(model_name, to_dir)
 
 
