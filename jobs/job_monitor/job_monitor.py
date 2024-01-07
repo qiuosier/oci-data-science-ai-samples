@@ -28,6 +28,7 @@ import metric_query
 from ads.common.oci_datascience import OCIDataScienceMixin
 from ads.common.oci_resource import OCIResource
 from ads.jobs import DataScienceJobRun, Job, DataScienceJob
+from ads.model.datascience_model import DataScienceModel
 
 
 SERVICE_METRICS_NAMESPACE = "oci_datascience_jobrun"
@@ -682,3 +683,30 @@ def authenticate_with_token():
     except subprocess.CalledProcessError as ex:
         error = ex.output
     return jsonify({"error": str(error)})
+
+
+@app.route("/studio")
+def studio_dashboard():
+    context = init_components()
+    return render_template("studio.html", **context)
+
+
+@app.route("/studio/models")
+def studio_models():
+    compartment_id = request.args.get("c")
+    project_id = request.args.get("p")
+    models = DataScienceModel.list(
+        compartment_id=compartment_id,
+        project_id=project_id,
+        lifecycle_state="ACTIVE"
+    )
+    models = [m.to_dict()["spec"] for m in models]
+    for model in models:
+        model["metadata"] = {item["key"]: item["value"] for item in model["customMetadataList"]["data"]}
+        if model['metadata'].get('base_model', "").startswith("ocid"):
+            model['metadata']['is_base_model'] = False
+        else:
+            model['metadata']['is_base_model'] = True
+    context = {"models": models}
+    context["html"] = render_template("row_models.html", **context)
+    return jsonify(context)

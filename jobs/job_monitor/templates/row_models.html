@@ -1,0 +1,21 @@
+<div class="row">
+    {% for model in models %}
+    <div class="card m-3" style="width: 18rem;">
+        <div class="d-flex align-items-center p-3" style="height: 180px;">
+            <img class="img-fluid" src="{{ model['metadata']['image'] }}">
+        </div>
+        <div class="card-body">
+            <h5 class="card-title">{{ model.displayName }}</h5>
+            {% if model['metadata']['is_base_model'] %}
+            <span class="badge bg-success">Base Model</span>
+            {% else %}
+            <span class="badge bg-success">Fine-Tuned</span>
+            {% endif %}
+            <div class="pt-3" style="height: 180px;">
+                <p class="card-text">{{ model['metadata']['description'] }}</p>
+            </div>
+            <button class="btn btn-primary">Deploy...</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>

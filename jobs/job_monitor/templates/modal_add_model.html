@@ -1,0 +1,43 @@
+<button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal-add-model">
+  Add Model...
+</button>
+<div id="modal-add-model" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Add New Model</h4>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        You can add a new model from HuggingFace.
+        <div style="height: 20px;"></div>
+        <form>
+          <div class="form-group mt-3">
+            <label for="input-model-path">Model Path</label>
+            <input type="text" class="form-control" id="input-model-path" placeholder="">
+          </div>
+          <div class="form-group mt-3">
+            <label for="input-object-storage-prefix">Object Storage Path</label>
+            <div class="input-group">
+              <div class="input-group-prepend">
+                <div class="input-group-text">oci://</div>
+              </div>
+              <input type="text" class="form-control" id="input-object-storage-bucket" placeholder="bucket">
+              <div class="input-group-prepend">
+                <div class="input-group-text">@</div>
+              </div>
+              <input type="text" class="form-control" id="input-object-storage-namespace" placeholder="namespace">
+              <input type="text" class="form-control" id="input-object-storage-prefix" placeholder="prefix">
+            </div>
+            <small class="form-text text-muted">This is where the model files will be saved.</small>
+          </div>
+
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" onclick="" data-bs-dismiss="modal">Add Model</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
