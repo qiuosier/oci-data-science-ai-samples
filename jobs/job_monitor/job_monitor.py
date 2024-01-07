@@ -448,7 +448,7 @@ def get_logs(job_run_ocid):
 
 
 @app.route("/delete/<ocid>")
-def delete_job(ocid):
+def delete_resource(ocid):
     check_endpoint()
     if is_valid_ocid("datasciencejob", ocid):
         job = Job.from_datascience_job(ocid)
@@ -468,6 +468,15 @@ def delete_job(ocid):
             run.delete()
             error = None
             logger.info("Deleted Job Run: %s", ocid)
+        except oci.exceptions.ServiceError as ex:
+            error = ex.message
+
+    elif is_valid_ocid("datasciencemodel", ocid):
+        resource = DataScienceModel.from_id(ocid)
+        try:
+            resource.delete()
+            error = None
+            logger.info("Deleted Model: %s", ocid)
         except oci.exceptions.ServiceError as ex:
             error = ex.message
 

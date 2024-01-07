@@ -134,7 +134,7 @@ function setCardStyle(card, borderClass) {
 function deleteResource(ocid) {
   var serviceEndpoint = $("#service-endpoint").text();
   $.getJSON("/delete/" + ocid + "?endpoint=" + serviceEndpoint, function (data) {
-    console.log("Deleting Job: " + ocid);
+    console.log("Deleting: " + ocid);
     if (data.error === null) {
       $("#" + ocid.replace(/\./g, "")).remove();
     } else {

@@ -1,0 +1,22 @@
+<button type="button" class="btn-close" data-bs-toggle="modal"
+  data-bs-target="#modal-model-delete-{{ model.id|replace('.', '_') }}"></button>
+<div id="modal-model-delete-{{ model.id|replace('.', '_') }}" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <!-- Modal content-->
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Delete {{ model.displayName}}</h4>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Delete Model? <br />
+        {{ model.id }}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger" onclick="deleteResource('{{ model.id }}')"
+          data-bs-dismiss="modal">Delete Model</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>

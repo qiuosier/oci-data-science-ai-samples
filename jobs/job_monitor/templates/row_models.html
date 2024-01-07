@@ -1,8 +1,8 @@
 <div class="row">
     {% for model in models %}
-    <div class="card m-3 p-2" style="width: 18rem;">
+    <div id="{{ model.id|replace('.', '') }}" class="card m-3 p-2" style="width: 18rem;">
         <div class="d-flex justify-content-end">
-            <button type="button" class="btn-close"></button>
+            {% include "modal_model_delete.html" %}
         </div>
 
         <div class="d-flex align-items-center" style="height: 180px;">
