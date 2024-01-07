@@ -1,0 +1,33 @@
+kind: job
+spec:
+  infrastructure:
+    kind: infrastructure
+    spec:
+      blockStorageSize: 1024
+      compartmentId: "{{ compartment_id }}"
+      projectId: "{{ project_id }}"
+      subnetId: "{{ subnet_id }}"
+      logGroupId: "{{ log_group_id }}"
+      logId: "{{ log_id }}"
+      shapeName: VM.Standard2.1
+    type: dataScienceJob
+  runtime:
+    kind: runtime
+    spec:
+      scriptPathURI: "{{ script_path }}"
+      conda:
+        type: published
+        uri: oci://a_bucket_for_qq@idtlxnfdweil/conda/gpu/vllm/1/vllmv1
+      args:
+        - "{{ model_path }}"
+        - "{{ local_dir }}"
+      env:
+        - name: CRYPTOGRAPHY_OPENSSL_NO_LEGACY
+          value: "1"
+        - name: LD_LIBRARY_PATH
+          value: /usr/local/nvidia/lib:/usr/local/nvidia/lib64:/opt/conda/lib
+        - name: HUGGING_FACE_HUB_TOKEN
+          value: "{{ hf_token }}"
+      outputDir: "{{ output_dir }}"
+      outputUri: "{{ object_storage_path }}"
+    type: python

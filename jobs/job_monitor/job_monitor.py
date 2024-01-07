@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 import traceback
 import urllib.parse
 
@@ -29,6 +30,8 @@ from ads.common.oci_datascience import OCIDataScienceMixin
 from ads.common.oci_resource import OCIResource
 from ads.jobs import DataScienceJobRun, Job, DataScienceJob
 from ads.model.datascience_model import DataScienceModel
+from ads.model.generic_model import GenericModel
+from ads.model.model_metadata import MetadataCustomCategory
 
 
 SERVICE_METRICS_NAMESPACE = "oci_datascience_jobrun"
@@ -57,6 +60,8 @@ logging.lastResort.setLevel(LOG_LEVEL)
 logging.getLogger("telemetry").setLevel(LOG_LEVEL)
 logger = logging.getLogger(__name__)
 logger.setLevel(LOG_LEVEL)
+
+global_tenancy_id = None
 
 
 # API key config
@@ -264,41 +269,43 @@ def init_components():
         compartment_id = None
 
     auth = get_authentication()
-    tenancy_id = request.args.get("t")
-    if not tenancy_id:
-        tenancy_id = get_tenancy_ocid(auth)
-    logger.debug("Tenancy ID: %s", tenancy_id)
+    global global_tenancy_id
+    tenancy_ocid = request.args.get("t")
+    if not tenancy_ocid:
+        tenancy_ocid = get_tenancy_ocid(auth)
+    global_tenancy_id = tenancy_ocid
+    logger.debug("Tenancy ID: %s", global_tenancy_id)
     client = oci.identity.IdentityClient(**auth)
     compartments = []
     error = None
     # User may not have permissions to list compartment.
     try:
         compartments.extend(
-            list_all_sub_compartments(client, compartment_id=tenancy_id)
+            list_all_sub_compartments(client, compartment_id=global_tenancy_id)
         )
     except oci.exceptions.ServiceError:
         traceback.print_exc()
-        error = f"ERROR: Unable to list all sub compartment in tenancy {tenancy_id}."
+        error = f"ERROR: Unable to list all sub compartment in tenancy {global_tenancy_id}."
         try:
             compartments.append(
-                list_all_child_compartments(client, compartment_id=tenancy_id)
+                list_all_child_compartments(client, compartment_id=global_tenancy_id)
             )
         except oci.exceptions.ServiceError:
             traceback.print_exc()
             error = (
-                f"ERROR: Unable to list all child compartment in tenancy {tenancy_id}."
+                f"ERROR: Unable to list all child compartment in tenancy {global_tenancy_id}."
             )
     try:
-        root_compartment = client.get_compartment(tenancy_id).data
+        root_compartment = client.get_compartment(global_tenancy_id).data
         compartments.insert(0, root_compartment)
     except oci.exceptions.ServiceError:
         traceback.print_exc()
-        error = f"ERROR: Unable to get details of the root compartment {tenancy_id}."
+        error = f"ERROR: Unable to get details of the root compartment {global_tenancy_id}."
         if compartments:
             compartments.insert(
                 0,
                 oci.identity.models.Compartment(
-                    id=tenancy_id, name=" ** Root - Name N/A **"
+                    id=global_tenancy_id, name=" ** Root - Name N/A **"
                 ),
             )
     context = dict(
@@ -685,14 +692,28 @@ def authenticate_with_token():
     return jsonify({"error": str(error)})
 
 
+@app.route("/storage/buckets")
+def storage_namespace():
+    tenancy_id = request.args.get("t", global_tenancy_id)
+    compartment_id = request.args.get("c", tenancy_id)
+    auth = get_authentication()
+    client = oci.object_storage.ObjectStorageClient(**auth)
+    namespace = client.get_namespace(compartment_id=tenancy_id).data
+    buckets = oci.pagination.list_call_get_all_results(client.list_buckets, namespace, compartment_id).data
+    return jsonify({
+        "namespace": namespace,
+        "buckets": [bucket.name for bucket in buckets]
+    })
+
+
 @app.route("/studio")
 def studio_dashboard():
     context = init_components()
     return render_template("studio.html", **context)
 
 
-@app.route("/studio/models")
-def studio_models():
+@app.route("/studio/models", methods=["GET"])
+def studio_list_models():
     compartment_id = request.args.get("c")
     project_id = request.args.get("p")
     models = DataScienceModel.list(
@@ -701,6 +722,7 @@ def studio_models():
         lifecycle_state="ACTIVE"
     )
     models = [m.to_dict()["spec"] for m in models]
+    models.reverse()
     for model in models:
         model["metadata"] = {item["key"]: item["value"] for item in model["customMetadataList"]["data"]}
         if model['metadata'].get('base_model', "").startswith("ocid"):
@@ -710,3 +732,84 @@ def studio_models():
     context = {"models": models}
     context["html"] = render_template("row_models.html", **context)
     return jsonify(context)
+
+
+@app.route("/studio/models", methods=["POST"])
+def studio_add_model():
+    data = request.get_json()
+    data.update(config)
+    data["script_path"] = os.path.join(os.path.dirname(__file__), "artifacts", "download_model.py")
+    data["output_dir"] = "/home/datascience/outputs"
+    data["local_dir"] = os.path.join(data["output_dir"], data["model_path"])
+    required_settings = ["subnet_id", "log_group_id", "log_id", "hf_token"]
+    for key in required_settings:
+        if key not in data:
+            abort_with_json_error(400, f"Please set {key} in config.json and restart the app.")
+    # Create the model
+    with open(
+        os.path.join(os.path.dirname(__file__), "artifacts", "metadata.json"),
+        "r",
+        encoding="utf-8"
+    ) as f:
+        metadata = json.load(f)
+        predefined = {}
+        for key in metadata.keys():
+            if data["model_path"].startswith(key):
+                predefined = metadata[key]
+                break
+    with tempfile.TemporaryDirectory() as artifact_dir:
+        generic_model = GenericModel(artifact_dir=artifact_dir)
+        generic_model.prepare(
+            inference_conda_env="oci://a_bucket_for_qq@idtlxnfdweil/conda/gpu/vllm/1/vllmv1",
+            inference_python_version="3.9",
+            score_py_uri=os.path.join(os.path.dirname(__file__), "artifacts", "score_vllm.py"),
+            force_overwrite=True,
+        )
+
+        generic_model.metadata_custom.add(
+            key='model_path',
+            value=data["object_storage_path"],
+            category=MetadataCustomCategory.OTHER,
+            description='OCI object storage URI for the model files',
+            replace=True
+        )
+        generic_model.metadata_custom.add(
+            key='base_model',
+            value=data["model_path"],
+            category=MetadataCustomCategory.OTHER,
+            description='',
+            replace=True
+        )
+        generic_model.metadata_custom.add(
+            key='image',
+            value=predefined["image"],
+            category=MetadataCustomCategory.OTHER,
+            description='',
+            replace=True
+        )
+        # Create job to download the model files
+        job_yaml_string = render_template("job_download_model.yaml", **data)
+        job = Job.from_string(job_yaml_string).create()
+        run = job.run()
+        generic_model.metadata_custom.add(
+            key='download_job',
+            value=job.id,
+            category=MetadataCustomCategory.OTHER,
+            description='',
+            replace=True
+        )
+        generic_model.metadata_custom.add(
+            key='download_job_run',
+            value=run.id,
+            category=MetadataCustomCategory.OTHER,
+            description='',
+            replace=True
+        )
+        generic_model.save(
+            display_name=data["model_path"],
+            compartment_id=data["compartment_id"],
+            project_id=data["project_id"],
+            ignore_introspection=True,
+            reload=False
+        )
+    return jsonify(generic_model.dsc_model.to_dict())

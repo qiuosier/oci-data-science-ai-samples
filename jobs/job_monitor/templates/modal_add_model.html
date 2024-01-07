@@ -14,20 +14,25 @@
         <form>
           <div class="form-group mt-3">
             <label for="input-model-path">Model Path</label>
-            <input type="text" class="form-control" id="input-model-path" placeholder="">
+            <input type="text" class="form-control" id="input-model-path" value="meta-llama/Llama-2-7b-hf"
+              placeholder="meta-llama/Llama-2-7b-hf">
           </div>
           <div class="form-group mt-3">
-            <label for="input-object-storage-prefix">Object Storage Path</label>
+            <label for="input-storage-prefix">Object Storage Path</label>
             <div class="input-group">
               <div class="input-group-prepend">
                 <div class="input-group-text">oci://</div>
               </div>
-              <input type="text" class="form-control" id="input-object-storage-bucket" placeholder="bucket">
+              <select id="input-storage-bucket" class="form-select">
+              </select>
               <div class="input-group-prepend">
                 <div class="input-group-text">@</div>
               </div>
-              <input type="text" class="form-control" id="input-object-storage-namespace" placeholder="namespace">
-              <input type="text" class="form-control" id="input-object-storage-prefix" placeholder="prefix">
+              <input type="text" class="form-control" id="input-storage-namespace" placeholder="namespace">
+              <div class="input-group-prepend">
+                <div class="input-group-text">/</div>
+              </div>
+              <input type="text" class="form-control" id="input-storage-prefix" placeholder="prefix" value="models">
             </div>
             <small class="form-text text-muted">This is where the model files will be saved.</small>
           </div>
@@ -35,7 +40,11 @@
         </form>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-primary" onclick="" data-bs-dismiss="modal">Add Model</button>
+        <div id="error-add-model" class="d-none text-danger"></div>
+        <div id="spinner-add-model" class="spinner-border text-primary d-none" role="status"></div>
+        <button type="button" id="button-add-model" class="btn btn-primary" onclick="addModel();">
+          Download and Add
+        </button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
       </div>
     </div>
