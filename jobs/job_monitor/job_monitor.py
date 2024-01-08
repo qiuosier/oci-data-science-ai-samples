@@ -25,8 +25,7 @@ from flask import (
     redirect,
 )
 
-import metric_query
-from studio import jobs as studio_jobs
+
 from ads.common.oci_datascience import OCIDataScienceMixin
 from ads.common.oci_resource import OCIResource
 from ads.jobs import DataScienceJobRun, Job, DataScienceJob
@@ -34,6 +33,10 @@ from ads.model.datascience_model import DataScienceModel
 from ads.model.generic_model import GenericModel
 from ads.model.model_metadata import MetadataCustomCategory
 from ads.common.object_storage_details import ObjectStorageDetails
+
+import metric_query
+from studio import jobs as studio_jobs
+from studio.models import StudioModel
 
 
 SERVICE_METRICS_NAMESPACE = "oci_datascience_jobrun"
@@ -757,63 +760,16 @@ def studio_add_model():
     data = request.get_json()
     data.update(config)
 
-    required_settings = ["subnet_id", "log_group_id", "log_id", "hf_token"]
+    required_settings = ["subnet_id", "log_group_id", "log_id", "hf_token", "conda_env"]
     for key in required_settings:
         if key not in data:
             abort_with_json_error(400, f"Please set {key} in config.json and restart the app.")
     # Create the model
-    with open(
-        os.path.join(os.path.dirname(__file__), "artifacts", "metadata.json"),
-        "r",
-        encoding="utf-8"
-    ) as f:
-        metadata = json.load(f)
-        predefined = {}
-        for key in metadata.keys():
-            if data["model_path"].startswith(key):
-                predefined = metadata[key]
-                break
-    with tempfile.TemporaryDirectory() as artifact_dir:
-        generic_model = GenericModel(artifact_dir=artifact_dir)
-        generic_model.prepare(
-            inference_conda_env="oci://a_bucket_for_qq@idtlxnfdweil/conda/gpu/vllm/1/vllmv1",
-            inference_python_version="3.9",
-            score_py_uri=os.path.join(os.path.dirname(__file__), "artifacts", "score_vllm.py"),
-            force_overwrite=True,
-        )
-
-        generic_model.metadata_custom.add(
-            key='model_path',
-            value=data["object_storage_path"],
-            category=MetadataCustomCategory.OTHER,
-            description='OCI object storage URI for the model files',
-            replace=True
-        )
-        generic_model.metadata_custom.add(
-            key='base_model',
-            value=data["model_path"],
-            category=MetadataCustomCategory.OTHER,
-            description='',
-            replace=True
-        )
-        generic_model.metadata_custom.add(
-            key='image',
-            value=predefined["image"],
-            category=MetadataCustomCategory.OTHER,
-            description='',
-            replace=True
-        )
-        generic_model.save(
-            display_name=data["model_path"],
-            compartment_id=data["compartment_id"],
-            project_id=data["project_id"],
-            ignore_introspection=True,
-            reload=False
-        )
+    model = StudioModel().create(**data)
     # Create job to download the model files
     if data["download_files"]:
         studio_jobs.start_downloading_model(data)
-    return jsonify(generic_model.dsc_model.to_dict())
+    return jsonify(model.dsc_model.to_dict())
 
 
 @app.route("/studio/verify/<ocid>")

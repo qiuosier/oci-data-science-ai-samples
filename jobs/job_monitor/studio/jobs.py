@@ -13,7 +13,7 @@ DOWNLOAD_STATUS_FILENAME = "oci_download.json"
 
 def start_downloading_model(context):
     """Run a job to download the model files"""
-    context["script_path"] = os.path.join(os.path.dirname(__file__), "download_model.py")
+    context["script_path"] = os.path.join(os.path.dirname(__file__), "artifacts", "download_model.py")
     context["output_dir"] = "/home/datascience/outputs"
     context["local_dir"] = os.path.join(context["output_dir"], context["model_path"])
     job_yaml_string = render_template("job_download_model.yaml", **context)
