@@ -32,6 +32,7 @@ function addModel() {
         "object_storage_path": osPath,
         "compartment_id": compartmentId,
         "project_id": projectId,
+        "download_files": $('#input-download-files').prop('checked')
     }
     var button = $("#button-add-model");
     button.prop('disabled', true);

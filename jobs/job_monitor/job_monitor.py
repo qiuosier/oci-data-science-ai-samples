@@ -811,7 +811,8 @@ def studio_add_model():
             reload=False
         )
     # Create job to download the model files
-    studio_jobs.start_downloading_model(data)
+    if data["download_files"]:
+        studio_jobs.start_downloading_model(data)
     return jsonify(generic_model.dsc_model.to_dict())
 
 

@@ -35,6 +35,17 @@
               <input type="text" class="form-control" id="input-storage-prefix" placeholder="prefix" value="models">
             </div>
             <small class="form-text text-muted">This is where the model files will be saved.</small>
+            <div class="form-check mt-3">
+              <div>
+                <input class="form-check-input" type="checkbox" value="" id="input-download-files">
+                <label class="form-check-label" for="input-download-files">
+                  Save the model files to object storage once the model is added.
+                </label>
+              </div>
+              <small class="form-text text-muted">Files may also be downloaded automatically when you deploy or
+                fine-tune the model.</small>
+            </div>
+
           </div>
 
         </form>
@@ -43,7 +54,7 @@
         <div id="error-add-model" class="d-none text-danger"></div>
         <div id="spinner-add-model" class="spinner-border text-primary d-none" role="status"></div>
         <button type="button" id="button-add-model" class="btn btn-primary" onclick="addModel();">
-          Download and Add
+          Add
         </button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
       </div>

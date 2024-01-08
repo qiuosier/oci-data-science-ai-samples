@@ -18,9 +18,6 @@
 
             <div class="pt-3" style="height: 180px;">
                 <p class="card-text">{{ model['metadata']['description'] }}</p>
-                {% if model['metadata']['downloaded_time'] %}
-                <p>Downloaded at {{ model['metadata']['downloaded_time'] }}</p>
-                {% endif %}
             </div>
             <button class="btn btn-primary">Deploy...</button>
         </div>
