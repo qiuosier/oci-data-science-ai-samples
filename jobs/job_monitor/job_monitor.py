@@ -26,12 +26,14 @@ from flask import (
 )
 
 import metric_query
+from studio import jobs as studio_jobs
 from ads.common.oci_datascience import OCIDataScienceMixin
 from ads.common.oci_resource import OCIResource
 from ads.jobs import DataScienceJobRun, Job, DataScienceJob
 from ads.model.datascience_model import DataScienceModel
 from ads.model.generic_model import GenericModel
 from ads.model.model_metadata import MetadataCustomCategory
+from ads.common.object_storage_details import ObjectStorageDetails
 
 
 SERVICE_METRICS_NAMESPACE = "oci_datascience_jobrun"
@@ -721,6 +723,17 @@ def studio_dashboard():
     return render_template("studio.html", **context)
 
 
+def model_metadata_to_dict(model):
+    if not isinstance(model, dict):
+        model = model.to_dict()["spec"]
+    metadata = {item["key"]: item["value"] for item in model["customMetadataList"]["data"]}
+    if metadata.get('base_model', "").startswith("ocid"):
+        metadata['is_base_model'] = False
+    else:
+        metadata['is_base_model'] = True
+    return metadata
+
+
 @app.route("/studio/models", methods=["GET"])
 def studio_list_models():
     compartment_id = request.args.get("c")
@@ -733,11 +746,7 @@ def studio_list_models():
     models = [m.to_dict()["spec"] for m in models]
     models.reverse()
     for model in models:
-        model["metadata"] = {item["key"]: item["value"] for item in model["customMetadataList"]["data"]}
-        if model['metadata'].get('base_model', "").startswith("ocid"):
-            model['metadata']['is_base_model'] = False
-        else:
-            model['metadata']['is_base_model'] = True
+        model["metadata"] = model_metadata_to_dict(model)
     context = {"models": models}
     context["html"] = render_template("row_models.html", **context)
     return jsonify(context)
@@ -747,9 +756,7 @@ def studio_list_models():
 def studio_add_model():
     data = request.get_json()
     data.update(config)
-    data["script_path"] = os.path.join(os.path.dirname(__file__), "artifacts", "download_model.py")
-    data["output_dir"] = "/home/datascience/outputs"
-    data["local_dir"] = os.path.join(data["output_dir"], data["model_path"])
+
     required_settings = ["subnet_id", "log_group_id", "log_id", "hf_token"]
     for key in required_settings:
         if key not in data:
@@ -796,24 +803,6 @@ def studio_add_model():
             description='',
             replace=True
         )
-        # Create job to download the model files
-        job_yaml_string = render_template("job_download_model.yaml", **data)
-        job = Job.from_string(job_yaml_string).create()
-        run = job.run()
-        generic_model.metadata_custom.add(
-            key='download_job',
-            value=job.id,
-            category=MetadataCustomCategory.OTHER,
-            description='',
-            replace=True
-        )
-        generic_model.metadata_custom.add(
-            key='download_job_run',
-            value=run.id,
-            category=MetadataCustomCategory.OTHER,
-            description='',
-            replace=True
-        )
         generic_model.save(
             display_name=data["model_path"],
             compartment_id=data["compartment_id"],
@@ -821,4 +810,28 @@ def studio_add_model():
             ignore_introspection=True,
             reload=False
         )
+    # Create job to download the model files
+    studio_jobs.start_downloading_model(data)
     return jsonify(generic_model.dsc_model.to_dict())
+
+
+@app.route("/studio/verify/<ocid>")
+def verify_model(ocid):
+    model = DataScienceModel.from_id(ocid)
+    metadata = model_metadata_to_dict(model)
+    os_uri = ObjectStorageDetails.from_path(os.path.join(
+        metadata["model_path"],
+        studio_jobs.DOWNLOAD_STATUS_FILENAME
+    ))
+    auth = get_authentication()
+    os_client = oci.object_storage.ObjectStorageClient(**auth)
+    try:
+        response = os_client.get_object(
+            namespace_name=os_uri.namespace,
+            bucket_name=os_uri.bucket,
+            object_name=os_uri.filepath,
+        )
+        metadata["download_status"] = json.loads(response.data.text)
+    except oci.exceptions.ServiceError:
+        metadata["download_status"] = {}
+    return jsonify(metadata)
