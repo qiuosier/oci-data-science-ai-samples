@@ -1,0 +1,18 @@
+<a href="#" class="pe-1" data-bs-toggle="modal" data-bs-target="#modal-model-details-{{ model.id|replace('.', '_') }}">
+  <i title="Model Info..." class="bi-info-circle"></i>
+</a>
+<div id="modal-model-details-{{ model.id|replace('.', '_') }}" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <!-- Modal content-->
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">{{ model.displayName}}</h4>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+      </div>
+      <div class="modal-footer">
+      </div>
+    </div>
+  </div>
+</div>

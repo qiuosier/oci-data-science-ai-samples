@@ -2,6 +2,7 @@
     {% for model in models %}
     <div id="{{ model.id|replace('.', '') }}" class="card m-3 p-2" style="width: 18rem;">
         <div class="d-flex justify-content-end">
+            {% include "modal_model_info.html" %}
             {% include "modal_model_delete.html" %}
         </div>
 
