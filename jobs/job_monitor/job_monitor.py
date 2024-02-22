@@ -5,8 +5,8 @@ import logging
 import os
 import re
 import subprocess
-import tempfile
 import traceback
+import sys
 import urllib.parse
 
 import ads
@@ -30,8 +30,6 @@ from ads.common.oci_datascience import OCIDataScienceMixin
 from ads.common.oci_resource import OCIResource
 from ads.jobs import DataScienceJobRun, Job, DataScienceJob
 from ads.model.datascience_model import DataScienceModel
-from ads.model.generic_model import GenericModel
-from ads.model.model_metadata import MetadataCustomCategory
 from ads.common.object_storage_details import ObjectStorageDetails
 
 import metric_query
@@ -142,12 +140,17 @@ def get_authentication():
             file_location=OCI_KEY_CONFIG_LOCATION, profile_name=OCI_KEY_PROFILE_NAME
         )
         if "security_token_file" in oci_config and "key_file" in oci_config:
-            token_file = oci_config["security_token_file"]
-            with open(token_file, "r", encoding="utf-8") as f:
-                token = f.read()
-            private_key = oci.signer.load_private_key_from_file(oci_config["key_file"])
-            signer = oci.auth.signers.SecurityTokenSigner(token, private_key)
-            oci_auth = {"config": oci_config, "signer": signer}
+            try:
+                token_file = oci_config["security_token_file"]
+                with open(token_file, "r", encoding="utf-8") as f:
+                    token = f.read()
+                private_key = oci.signer.load_private_key_from_file(
+                    oci_config["key_file"]
+                )
+                signer = oci.auth.signers.SecurityTokenSigner(token, private_key)
+                oci_auth = {"config": oci_config, "signer": signer}
+            except FileNotFoundError:
+                oci_auth = {"config": oci_config}
         else:
             oci_auth = {"config": oci_config}
     elif (
@@ -198,6 +201,8 @@ def check_compartment_id(compartment_id):
 def is_valid_ocid(resource_type, ocid):
     if re.match(r"ocid[0-9]." + resource_type + r".oc[0-9].[a-z-]+.[a-z0-9]+", ocid):
         return True
+    if re.match(r"ocid[0-9]." + resource_type + r"int.oc[0-9].[a-z-]+.[a-z0-9]+", ocid):
+        return True
     return False
 
 
@@ -217,8 +222,10 @@ def check_endpoint():
     endpoint = request.args.get("endpoint")
     if endpoint:
         OCIDataScienceMixin.kwargs = {"service_endpoint": endpoint}
+        os.environ["OCI_ODSC_SERVICE_ENDPOINT"] = endpoint
     else:
         OCIDataScienceMixin.kwargs = None
+        os.environ.pop("OCI_ODSC_SERVICE_ENDPOINT", None)
     return endpoint
 
 
@@ -290,22 +297,24 @@ def init_components():
         )
     except oci.exceptions.ServiceError:
         traceback.print_exc()
-        error = f"ERROR: Unable to list all sub compartment in tenancy {global_tenancy_id}."
+        error = (
+            f"ERROR: Unable to list all sub compartment in tenancy {global_tenancy_id}."
+        )
         try:
             compartments.append(
                 list_all_child_compartments(client, compartment_id=global_tenancy_id)
             )
         except oci.exceptions.ServiceError:
             traceback.print_exc()
-            error = (
-                f"ERROR: Unable to list all child compartment in tenancy {global_tenancy_id}."
-            )
+            error = f"ERROR: Unable to list all child compartment in tenancy {global_tenancy_id}."
     try:
         root_compartment = client.get_compartment(global_tenancy_id).data
         compartments.insert(0, root_compartment)
     except oci.exceptions.ServiceError:
         traceback.print_exc()
-        error = f"ERROR: Unable to get details of the root compartment {global_tenancy_id}."
+        error = (
+            f"ERROR: Unable to get details of the root compartment {global_tenancy_id}."
+        )
         if compartments:
             compartments.insert(
                 0,
@@ -322,6 +331,7 @@ def init_components():
         error=error,
     )
     return context
+
 
 @app.route("/favicon.ico")
 def favicon():
@@ -445,9 +455,9 @@ def get_logs(job_run_ocid):
         "logs": logs,
         "status": run.lifecycle_state,
         "statusDetails": run.lifecycle_details,
-        "stopped": True
-        if run.lifecycle_state in DataScienceJobRun.TERMINAL_STATES
-        else False,
+        "stopped": (
+            True if run.lifecycle_state in DataScienceJobRun.TERMINAL_STATES else False
+        ),
     }
     return jsonify(context)
 
@@ -484,6 +494,8 @@ def delete_resource(ocid):
             logger.info("Deleted Model: %s", ocid)
         except oci.exceptions.ServiceError as ex:
             error = ex.message
+    else:
+        error = "Not supported"
 
     return jsonify({"ocid": ocid, "error": error})
 
@@ -518,6 +530,7 @@ def load_yaml(filename=None):
 @app.route("/run", methods=["POST"])
 def run_workload():
     oci_auth = get_authentication()
+    check_endpoint()
     # The following config check is added for security reason.
     # When the app is started with resource principal or instance principal,
     # this will restrict the app to only monitor job runs and status.
@@ -637,9 +650,11 @@ def get_metrics(name, ocid):
             "ocid_dimension": dimension,
             "monitoring_client": client,
             "start": job_run.time_started,
-            "end": job_run.time_finished
-            if job_run.time_finished
-            else datetime.datetime.now(datetime.timezone.utc),
+            "end": (
+                job_run.time_finished
+                if job_run.time_finished
+                else datetime.datetime.now(datetime.timezone.utc)
+            ),
         }
         results = metric_query.get_metric_values(**metric_query_args)
 
@@ -699,7 +714,7 @@ def authenticate_with_token():
     if region:
         cmd += f" --region {region}"
     try:
-        subprocess.check_output(cmd, shell=True)
+        subprocess.check_output(f"{cmd}", shell=True)
         error = None
     except subprocess.CalledProcessError as ex:
         error = ex.output
@@ -713,11 +728,12 @@ def storage_namespace():
     auth = get_authentication()
     client = oci.object_storage.ObjectStorageClient(**auth)
     namespace = client.get_namespace(compartment_id=tenancy_id).data
-    buckets = oci.pagination.list_call_get_all_results(client.list_buckets, namespace, compartment_id).data
-    return jsonify({
-        "namespace": namespace,
-        "buckets": [bucket.name for bucket in buckets]
-    })
+    buckets = oci.pagination.list_call_get_all_results(
+        client.list_buckets, namespace, compartment_id
+    ).data
+    return jsonify(
+        {"namespace": namespace, "buckets": [bucket.name for bucket in buckets]}
+    )
 
 
 @app.route("/studio")
@@ -729,11 +745,13 @@ def studio_dashboard():
 def model_metadata_to_dict(model):
     if not isinstance(model, dict):
         model = model.to_dict()["spec"]
-    metadata = {item["key"]: item["value"] for item in model["customMetadataList"]["data"]}
-    if metadata.get('base_model', "").startswith("ocid"):
-        metadata['is_base_model'] = False
+    metadata = {
+        item["key"]: item["value"] for item in model["customMetadataList"]["data"]
+    }
+    if metadata.get("base_model", "").startswith("ocid"):
+        metadata["is_base_model"] = False
     else:
-        metadata['is_base_model'] = True
+        metadata["is_base_model"] = True
     return metadata
 
 
@@ -742,9 +760,7 @@ def studio_list_models():
     compartment_id = request.args.get("c")
     project_id = request.args.get("p")
     models = DataScienceModel.list(
-        compartment_id=compartment_id,
-        project_id=project_id,
-        lifecycle_state="ACTIVE"
+        compartment_id=compartment_id, project_id=project_id, lifecycle_state="ACTIVE"
     )
     models = [m.to_dict()["spec"] for m in models]
     models.reverse()
@@ -763,7 +779,9 @@ def studio_add_model():
     required_settings = ["subnet_id", "log_group_id", "log_id", "hf_token", "conda_env"]
     for key in required_settings:
         if key not in data:
-            abort_with_json_error(400, f"Please set {key} in config.json and restart the app.")
+            abort_with_json_error(
+                400, f"Please set {key} in config.json and restart the app."
+            )
     # Create the model
     model = StudioModel().create(**data)
     # Create job to download the model files
@@ -776,10 +794,9 @@ def studio_add_model():
 def verify_model(ocid):
     model = DataScienceModel.from_id(ocid)
     metadata = model_metadata_to_dict(model)
-    os_uri = ObjectStorageDetails.from_path(os.path.join(
-        metadata["model_path"],
-        studio_jobs.DOWNLOAD_STATUS_FILENAME
-    ))
+    os_uri = ObjectStorageDetails.from_path(
+        os.path.join(metadata["model_path"], studio_jobs.DOWNLOAD_STATUS_FILENAME)
+    )
     auth = get_authentication()
     os_client = oci.object_storage.ObjectStorageClient(**auth)
     try:
@@ -791,4 +808,9 @@ def verify_model(ocid):
         metadata["download_status"] = json.loads(response.data.text)
     except oci.exceptions.ServiceError:
         metadata["download_status"] = {}
+
+    job_run_id = metadata["download_status"].get("job_run_ocid")
+    if job_run_id:
+        run = DataScienceJobRun.from_ocid(job_run_id)
+        metadata["download_status"]["job_run_status"] = run.status
     return jsonify(metadata)

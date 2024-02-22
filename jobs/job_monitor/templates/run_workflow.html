@@ -121,11 +121,13 @@
               toastMessage(err);
               return;
             }
+            const urlParams = new URLSearchParams(window.location.search);
+            const endpoint = urlParams.get('endpoint');
 
             $.ajax({
               type: "POST",
               contentType: "application/json",
-              url: "/run",
+              url: "/run?endpoint=" + endpoint,
               data: { yaml: editor.getValue() },
             }).fail(function (data) {
               toastMessage("Error", data.responseJSON.error);
