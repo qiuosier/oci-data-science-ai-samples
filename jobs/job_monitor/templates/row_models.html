@@ -20,7 +20,7 @@
             <div class="pt-3" style="height: 180px;">
                 <p class="card-text">{{ model['metadata']['description'] }}</p>
             </div>
-            <button class="btn btn-primary">Deploy...</button>
+            {% include 'modal_model_deploy.html' %}
         </div>
     </div>
     {% endfor %}

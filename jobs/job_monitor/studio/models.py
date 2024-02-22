@@ -31,7 +31,7 @@ class StudioModel:
 
             generic_model.metadata_custom.add(
                 key='model_path',
-                value=object_storage_path,
+                value=os.path.join(object_storage_path, model_path),
                 category=MetadataCustomCategory.OTHER,
                 description='OCI object storage URI for the model files',
                 replace=True

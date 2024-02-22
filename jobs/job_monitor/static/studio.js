@@ -57,3 +57,21 @@ function addModel() {
         }
     });
 }
+
+function showDeployModal(model_id) {
+    $.getJSON("/studio/verify/" + model_id, function (data) {
+        var p = $("#modal-model-deploy-" + model_id.replaceAll(".", "_")).find(".download-status");
+        console.log(p)
+        if (data.download_status.job_run_ocid) {
+            if (data.download_status.job_run_status == "SUCCEEDED") {
+                p.text("Model files has been downloaded to " + data.model_path);
+            } else {
+                p.text("")
+            }
+        } else {
+            p.text("")
+        }
+    })
+
+}
+

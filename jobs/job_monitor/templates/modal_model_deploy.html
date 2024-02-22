@@ -1,0 +1,25 @@
+<button class="btn btn-primary" onclick="showDeployModal('{{ model.id }}')" data-bs-toggle="modal"
+  data-bs-target="#modal-model-deploy-{{ model.id|replace('.', '_') }}">Deploy...</button>
+<div id="modal-model-deploy-{{ model.id|replace('.', '_') }}" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <!-- Modal content-->
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Deploy {{ model.displayName }}</h4>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Would you like to deploy the model?</p>
+        <div class="download-status mt-3">
+          <div class="spinner-border spinner-border-sm text-primary">
+          </div>Checking model files ...
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger" onclick="deleteResource('{{ model.id }}')"
+          data-bs-dismiss="modal">Deploy</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
