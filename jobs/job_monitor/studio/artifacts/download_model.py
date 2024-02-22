@@ -22,15 +22,33 @@ def main():
         )
     model_name = sys.argv[1]
     local_dir = sys.argv[2]
-    os.makedirs(local_dir, exist_ok=True)
-    snapshot_download(repo_id=model_name, local_dir=local_dir, local_dir_use_symlinks=False)
+    print(f"Caching model {model_name} to local...")
+    retry = 0
+    while True:
+        try:
+            snapshot_download(repo_id=model_name, resume_download=True)
+            break
+        except:
+            retry += 1
+            if retry < 10:
+                continue
+            raise
+    print(f"Model {model_name} Cached.")
 
-    with open(os.path.join(local_dir, "oci_download.json"), 'w', encoding='utf-8') as f:
-        json.dump({
-            "job_ocid": os.environ.get("JOB_OCID"),
-            "job_run_ocid": os.environ.get("JOB_RUN_OCID"),
-            "done": True
-        }, f)
+    print(f"Moving model to {local_dir}...")
+    os.makedirs(local_dir, exist_ok=True)
+    snapshot_download(
+        repo_id=model_name, local_dir=local_dir, local_dir_use_symlinks=False
+    )
+
+    print(f"Downloaded model {model_name} to {local_dir}.")
+
+    # with open(os.path.join(local_dir, "oci_download.json"), 'w', encoding='utf-8') as f:
+    #     json.dump({
+    #         "job_ocid": os.environ.get("JOB_OCID"),
+    #         "job_run_ocid": os.environ.get("JOB_RUN_OCID"),
+    #         "done": True
+    #     }, f)
 
 
 if __name__ == "__main__":
