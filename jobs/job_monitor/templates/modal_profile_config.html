@@ -1,0 +1,58 @@
+<div class="input-group mb-3">
+  <span class="input-group-text">Profile</span>
+  <select class="form-select" name="profile" id="profile">
+  </select>
+  <!-- Button trigger modal -->
+  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#settingsModal">
+    <i title="Profile Settings" class="bi-gear"></i>
+  </button>
+</div>
+
+<!-- Modal YAML -->
+<div id="settingsModal" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <!-- Modal content -->
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Profile Settings</h4>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Profile Configurations</p>
+
+
+      </div>
+      <div class="modal-footer">
+        <p class="text-muted">Settings will be saved in
+        <pre>~/.oci/config.json</pre>
+        </p>
+        <button id="save-settings" type="button" class="btn btn-danger" data-bs-dismiss="modal">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function () {
+    var dropdown = $("#profile");
+    $.getJSON("/profiles", function (data) {
+      console.log(data.profiles);
+      data.profiles.forEach(element => {
+        if (element === data.selected) {
+          dropdown.append('<option value="' + element + '" selected>' + element + '</option>');
+        } else {
+          dropdown.append('<option value="' + element + '">' + element + '</option>');
+        }
+      });
+    });
+    dropdown.change(function () {
+      $.ajax({
+        type: "POST",
+        url: "/profiles",
+        data: JSON.stringify({ "profile": dropdown.val() }),
+        contentType: "application/json",
+        dataType: 'json',
+      })
+    })
+  })
+</script>

@@ -1,13 +1,12 @@
 import datetime
-import functools
+
 import json
-import logging
 import os
 import re
 import subprocess
 import traceback
-import sys
 import urllib.parse
+import uuid
 
 import ads
 import oci
@@ -17,12 +16,11 @@ import yaml
 from flask import (
     Flask,
     request,
-    abort,
     jsonify,
     render_template,
     render_template_string,
-    make_response,
     redirect,
+    session,
 )
 
 
@@ -33,6 +31,10 @@ from ads.model.datascience_model import DataScienceModel
 from ads.common.object_storage_details import ObjectStorageDetails
 
 import metric_query
+from commons.auth import get_authentication, load_oci_config, load_profiles
+from commons.logs import logger
+from commons.errors import abort_with_json_error, handle_service_exception
+from commons.config import CONFIG_MAP
 from studio import jobs as studio_jobs
 from studio.models import StudioModel
 
@@ -52,131 +54,16 @@ else:
     config = {}
 YAML_DIR = os.path.join(os.path.dirname(__file__), config.get("yaml_dir", None))
 
-# Config logging
-if "LOG_LEVEL" in os.environ and hasattr(logging, os.environ["LOG_LEVEL"]):
-    LOG_LEVEL = getattr(logging, os.environ["LOG_LEVEL"])
-else:
-    LOG_LEVEL = logging.INFO
-flask_log = logging.getLogger("werkzeug")
-flask_log.setLevel(LOG_LEVEL)
-logging.lastResort.setLevel(LOG_LEVEL)
-logging.getLogger("telemetry").setLevel(LOG_LEVEL)
-logger = logging.getLogger(__name__)
-logger.setLevel(LOG_LEVEL)
 
 global_tenancy_id = None
 
 
-# API key config
-OCI_KEY_CONFIG_LOCATION = os.environ.get("OCI_KEY_LOCATION", "~/.oci/config")
-OCI_KEY_PROFILE_NAME = os.environ.get("OCI_KEY_PROFILE", "DEFAULT")
-if os.path.exists(os.path.expanduser(OCI_KEY_CONFIG_LOCATION)):
-    logger.info("Using OCI API Key config: %s", OCI_KEY_CONFIG_LOCATION)
-    logger.info("Using OCI API Key profile: %s", OCI_KEY_PROFILE_NAME)
 # Flask templates location
 app = Flask(
     __name__, template_folder=os.path.join(os.path.dirname(__file__), "templates")
 )
-
-
-def abort_with_json_error(code, message):
-    abort(make_response(jsonify(error=message), code))
-
-
-def handle_service_exception(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            func(*args, **kwargs)
-        except oci.exceptions.ServiceError as ex:
-            return make_response(
-                jsonify(
-                    {
-                        "error": ex.code,
-                        "message": ex.message,
-                    }
-                ),
-                ex.status,
-            )
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
-def instance_principal_available():
-    try:
-        requests.get(
-            oci.auth.signers.InstancePrincipalsSecurityTokenSigner.GET_REGION_URL,
-            headers=oci.auth.signers.InstancePrincipalsDelegationTokenSigner.METADATA_AUTH_HEADERS,
-            timeout=1,
-        )
-        return True
-    except:
-        return False
-
-
-def get_authentication():
-    """Returns a dictionary containing the authentication needed for initializing OCI client (e.g. DataScienceClient).
-    This function checks if OCI API key config exists, if config exists, it will be loaded and used for authentication.
-    If config does not exist, resource principal or instance principal will be used if available.
-    To use a config at a non-default location, set the OCI_KEY_LOCATION environment variable.
-    To use a non-default config profile, set the OCI_KEY_PROFILE_NAME environment variable.
-
-    Returns
-    -------
-    dict
-        A dictionary containing two keys: config and signer (optional).
-        config is a dictionary containing api key authentication information.
-        signer is an OCI Signer object for resource principal or instance principal authentication.
-        IMPORTANT: signer will be returned only if config is not empty.
-
-    Raises
-    ------
-    Exception
-        When no authentication method is available.
-    """
-    if os.path.exists(os.path.expanduser(OCI_KEY_CONFIG_LOCATION)):
-        oci_config = oci.config.from_file(
-            file_location=OCI_KEY_CONFIG_LOCATION, profile_name=OCI_KEY_PROFILE_NAME
-        )
-        if "security_token_file" in oci_config and "key_file" in oci_config:
-            try:
-                token_file = oci_config["security_token_file"]
-                with open(token_file, "r", encoding="utf-8") as f:
-                    token = f.read()
-                private_key = oci.signer.load_private_key_from_file(
-                    oci_config["key_file"]
-                )
-                signer = oci.auth.signers.SecurityTokenSigner(token, private_key)
-                oci_auth = {"config": oci_config, "signer": signer}
-            except FileNotFoundError:
-                oci_auth = {"config": oci_config}
-        else:
-            oci_auth = {"config": oci_config}
-    elif (
-        oci.auth.signers.resource_principals_signer.OCI_RESOURCE_PRINCIPAL_VERSION
-        in os.environ
-    ):
-        oci_config = {}
-        signer = oci.auth.signers.get_resource_principals_signer()
-        oci_auth = dict(config=oci_config, signer=signer)
-    elif instance_principal_available():
-        oci_config = {}
-        signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
-        oci_auth = dict(config=oci_config, signer=signer)
-    else:
-        raise EnvironmentError("Cannot determine authentication method.")
-    ads.set_auth(**oci_auth)
-    return oci_auth
-
-
-def load_oci_config():
-    if not os.path.exists(os.path.expanduser(OCI_KEY_CONFIG_LOCATION)):
-        return {}
-    oci_config = oci.config.from_file(
-        file_location=OCI_KEY_CONFIG_LOCATION, profile_name=OCI_KEY_PROFILE_NAME
-    )
-    return oci_config
+# Use hardware address as secret key so it will likely be unique for each computer.
+app.secret_key = str(uuid.getnode())
 
 
 def check_ocid(ocid):
@@ -706,10 +593,27 @@ def supported_shapes(compartment_ocid):
     )
 
 
-@app.route("/authenticate/token")
-def authenticate_with_token():
-    auth = get_authentication()
-    cmd = f"oci session authenticate --profile-name {OCI_KEY_PROFILE_NAME}"
+@app.route("/profiles", methods=["GET"])
+def list_profiles():
+    profiles = list(load_profiles().keys())
+    return jsonify(
+        {"profiles": profiles, "selected": session.get("profile", profiles[0])}
+    )
+
+
+@app.route("/profiles", methods=["POST"])
+def select_profile():
+    data = request.get_json()
+    if "profile" in data:
+        session["profile"] = data["profile"]
+    return jsonify({})
+
+
+@app.route("/authenticate/token/<profile>")
+def authenticate_with_token(profile):
+    """Authenticate with security token."""
+    auth = get_authentication(profile_name=profile)
+    cmd = f"oci session authenticate --profile-name {profile}"
     region = auth.get("config", {}).get("region")
     if region:
         cmd += f" --region {region}"

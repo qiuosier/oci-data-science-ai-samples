@@ -25,12 +25,19 @@
 
 <body style="padding: 30px;">
   <div class="container-fluid">
-    <h1>Jobs Monitor</h1>
-    <div class="float-end">
-      {% include 'run_workflow.html' %}
+    <div class="row">
+      <div class="col-8">
+        <h1>Jobs Monitor</h1>
+        <p>Select compartment and project to show the most recent <span id="job-number-limit">{{ limit }}</span> jobs.
+        </p>
+      </div>
+      <div class="col-4">
+        {% include 'modal_profile_config.html'%}
+        {% include 'run_workflow.html' %}
+      </div>
     </div>
-    <p>Select compartment and project to show the most recent <span id="job-number-limit">{{ limit }}</span> jobs.</p>
     {% include 'div_authentication.html' %}
+
     <div class="row">
       {% include 'dropdown_compartment_project.html' %}
     </div>

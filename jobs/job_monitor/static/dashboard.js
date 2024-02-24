@@ -416,7 +416,7 @@ function metricDropdownClicked(element) {
 }
 
 function authenticate_with_token() {
-  $.getJSON("/authenticate/token", function (data) {
+  $.getJSON("/authenticate/token/" + $("#profile").val(), function (data) {
     if (data.error === null) {
       location.reload();
     } else {
