@@ -5,7 +5,7 @@ import configparser
 import oci
 import requests
 
-
+from flask import request
 from commons.logs import logger
 
 ENV_OCI_KEY_PROFILE = "OCI_KEY_PROFILE"
@@ -26,7 +26,7 @@ def instance_principal_available():
 
 def get_authentication(
     config_path=oci.config.DEFAULT_LOCATION,
-    profile_name=os.environ.get(ENV_OCI_KEY_PROFILE, oci.config.DEFAULT_PROFILE),
+    profile_name=None,
 ):
     """Returns a dictionary containing the authentication needed for initializing OCI client (e.g. DataScienceClient).
     This function checks if OCI API key config exists, if config exists, it will be loaded and used for authentication.
@@ -47,6 +47,11 @@ def get_authentication(
     Exception
         When no authentication method is available.
     """
+    if profile_name is None:
+        profile_name = request.args.get("profile")
+    if profile_name is None:
+        profile_name = os.environ.get(ENV_OCI_KEY_PROFILE, oci.config.DEFAULT_PROFILE)
+
     if os.path.exists(os.path.expanduser(config_path)):
         logger.info("Using OCI config: %s", config_path)
         logger.info("Using OCI profile: %s", profile_name)
