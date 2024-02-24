@@ -1,14 +1,11 @@
 import datetime
-
 import json
 import os
-import re
 import subprocess
 import traceback
 import urllib.parse
 import uuid
 
-import ads
 import oci
 import requests
 import yaml
@@ -25,7 +22,6 @@ from flask import (
 
 
 from ads.common.oci_datascience import OCIDataScienceMixin
-from ads.common.oci_resource import OCIResource
 from ads.jobs import DataScienceJobRun, Job, DataScienceJob
 from ads.model.datascience_model import DataScienceModel
 from ads.common.object_storage_details import ObjectStorageDetails
@@ -35,6 +31,12 @@ from commons.auth import get_authentication, load_oci_config, load_profiles
 from commons.logs import logger
 from commons.errors import abort_with_json_error, handle_service_exception
 from commons.config import CONFIG_MAP
+from commons.validation import (
+    check_ocid,
+    check_compartment_project,
+    check_limit,
+    is_valid_ocid,
+)
 from studio import jobs as studio_jobs
 from studio.models import StudioModel
 
@@ -66,45 +68,6 @@ app = Flask(
 app.secret_key = str(uuid.getnode())
 
 
-def check_ocid(ocid):
-    if not re.match(r"ocid[0-9].[a-z]+.oc[0-9].[a-z-]+.[a-z0-9]+", ocid):
-        abort_with_json_error(404, f"Invalid OCID: {ocid}")
-
-
-def check_project_id(project_id):
-    if not re.match(
-        r"ocid[0-9].datascienceproject.oc[0-9].[a-z-]+.[a-z0-9]+", project_id
-    ):
-        abort_with_json_error(404, f"Invalid Project OCID: {project_id}")
-
-
-def check_compartment_id(compartment_id):
-    if not re.match(
-        r"ocid[0-9].(compartment|tenancy).oc[0-9]..[a-z0-9]+", compartment_id
-    ):
-        abort_with_json_error(404, f"Invalid Compartment OCID: {compartment_id}")
-
-
-def is_valid_ocid(resource_type, ocid):
-    if re.match(r"ocid[0-9]." + resource_type + r".oc[0-9].[a-z-]+.[a-z0-9]+", ocid):
-        return True
-    if re.match(r"ocid[0-9]." + resource_type + r"int.oc[0-9].[a-z-]+.[a-z0-9]+", ocid):
-        return True
-    return False
-
-
-def check_compartment_project(compartment_id, project_id):
-    if str(project_id).lower() == "all":
-        project_id = None
-    else:
-        check_project_id(project_id)
-        # Lookup compartment when project ID is valid but no compartment is given.
-        if not compartment_id:
-            compartment_id = OCIResource.get_compartment_id(project_id)
-    check_compartment_id(compartment_id)
-    return compartment_id, project_id
-
-
 def check_endpoint():
     endpoint = request.args.get("endpoint")
     if endpoint:
@@ -114,13 +77,6 @@ def check_endpoint():
         OCIDataScienceMixin.kwargs = None
         os.environ.pop("OCI_ODSC_SERVICE_ENDPOINT", None)
     return endpoint
-
-
-def check_limit():
-    limit = request.args.get("limit", 10)
-    if isinstance(limit, str) and not limit.isdigit():
-        abort_with_json_error(400, "limit parameter must be an integer.")
-    return limit
 
 
 def list_all_sub_compartments(client: oci.identity.IdentityClient, compartment_id):
