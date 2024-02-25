@@ -28,15 +28,14 @@ from ads.common.object_storage_details import ObjectStorageDetails
 
 import metric_query
 from commons import service
-from commons.auth import get_authentication, load_oci_config, load_profiles
+from commons.auth import (
+    get_authentication,
+    get_ds_auth,
+    get_tenancy_ocid,
+)
 from commons.logs import logger
 from commons.errors import abort_with_json_error, handle_service_exception
-from commons.config import (
-    get_tenancy_ocid,
-    get_config,
-    CONST_YAML_DIR,
-    CONST_SERVICE_ENDPOINT,
-)
+from commons.config import get_config, get_endpoint, CONST_YAML_DIR, CONFIG_MAP
 from commons.validation import (
     check_ocid,
     check_compartment_project,
@@ -77,7 +76,9 @@ def init_components():
     compartment_id = request.args.get("c")
     project_id = request.args.get("p")
     limit = request.args.get("limit", 10)
-    endpoint = service.get_endpoint()
+
+    config = get_config()
+    endpoint = get_endpoint()
 
     if project_id:
         compartment_id, project_id = check_compartment_project(
@@ -127,6 +128,7 @@ def init_components():
         limit=limit,
         service_endpoint=endpoint,
         error=error,
+        config=config,
     )
     return context
 
@@ -155,11 +157,8 @@ def list_compartments():
 @app.route("/projects/<compartment_id>")
 def list_projects(compartment_id):
     """List projects in compartment."""
-    endpoint = service.get_endpoint()
     logger.debug("Getting projects in compartment %s", compartment_id)
-    ds_client = oci.data_science.DataScienceClient(
-        service_endpoint=endpoint, **get_authentication()
-    )
+    ds_client = oci.data_science.DataScienceClient(**get_ds_auth())
     projects = oci.pagination.list_call_get_all_results(
         ds_client.list_projects, compartment_id=compartment_id, sort_by="displayName"
     ).data
@@ -181,14 +180,11 @@ def list_jobs(compartment_id, project_id):
     """List jobs in project."""
     compartment_id, project_id = check_compartment_project(compartment_id, project_id)
     limit = check_limit()
-    endpoint = service.get_endpoint()
     job_list = []
 
     # Calling OCI API here instead of ADS API is faster :)
     jobs = (
-        oci.data_science.DataScienceClient(
-            service_endpoint=endpoint, **get_authentication()
-        )
+        oci.data_science.DataScienceClient(**get_ds_auth())
         .list_jobs(
             compartment_id=compartment_id,
             project_id=project_id,
@@ -212,17 +208,34 @@ def list_jobs(compartment_id, project_id):
     return jsonify({"limit": limit, "jobs": job_list, "error": None})
 
 
+class DSJobRun(DataScienceJobRun):
+    @property
+    def job(self):
+        if hasattr(self, "_job"):
+            return self._job
+        return super().job
+
+
 @app.route("/job_runs/<job_id>")
-@service.with_service_endpoint
 def list_job_runs(job_id):
     """List job runs."""
     check_ocid(job_id)
-    job = Job.from_datascience_job(job_id)
+    job = Job(**get_ds_auth(client="ads")).from_datascience_job(job_id)
     runs = job.run_list()
+    # client = oci.data_science.DataScienceClient(**get_ds_auth())
+    # ds_job = DataScienceJob.from_dsc_job(
+    #     DSCJob(**get_ds_auth(client="ads")).from_ocid(job_id)
+    # )
+    # job = Job(name=ds_job.name).with_infrastructure(ds_job).with_runtime(ds_job.runtime)
+    # items = oci.pagination.list_call_get_all_results(
+    #     client.list_job_runs, job.infrastructure.compartment_id, job_id=job_id
+    # ).data
+    # runs = [DSJobRun.from_oci_model(item) for item in items]
     run_list = []
     for run in runs:
         if run.status == "DELETED":
             continue
+        # run._job = job
         run_data = {
             "ocid": run.id,
             "job_ocid": job.id,
@@ -245,17 +258,20 @@ def format_logs(logs):
 
 
 @app.route("/logs/<job_run_ocid>")
-@service.with_service_endpoint
 def get_logs(job_run_ocid):
     """Get logs for a job run."""
     logger.debug("Getting logs for %s", job_run_ocid)
-    run = DataScienceJobRun.from_ocid(job_run_ocid)
+    run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(job_run_ocid)
     logger.debug("Job Run Status: %s - %s", run.lifecycle_state, run.lifecycle_details)
     if not run.log_id:
         logs = []
     else:
-        logs = run.logs()
-        logs = format_logs(logs)
+        try:
+            logs = run.logs()
+            logs = format_logs(logs)
+        except Exception:
+            traceback.print_exc()
+            logs = []
     logger.debug("%s - %s log messages.", job_run_ocid, str(len(logs)))
     context = {
         "ocid": job_run_ocid,
@@ -268,10 +284,9 @@ def get_logs(job_run_ocid):
 
 
 @app.route("/delete/<ocid>")
-@service.with_service_endpoint
 def delete_resource(ocid):
     if is_valid_ocid("datasciencejob", ocid):
-        job = Job.from_datascience_job(ocid)
+        job = Job(**get_ds_auth(client="ads")).from_datascience_job(ocid)
         try:
             job.delete()
             error = None
@@ -280,7 +295,7 @@ def delete_resource(ocid):
             error = ex.message
 
     elif is_valid_ocid("datasciencejobrun", ocid):
-        run = DataScienceJobRun.from_ocid(ocid)
+        run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(ocid)
         try:
             if run.status not in run.TERMINAL_STATES:
                 run.cancel()
@@ -328,7 +343,7 @@ def load_yaml_list(uri):
 def load_yaml(filename=None):
     """Load YAML file."""
     config = get_config()
-    yaml_dir = config[CONST_YAML_DIR]
+    yaml_dir = config.get(CONST_YAML_DIR, "./job_yaml")
     if not filename:
         return jsonify(load_yaml_list(yaml_dir))
     with open(os.path.join(yaml_dir, filename), encoding="utf-8") as f:
@@ -337,7 +352,6 @@ def load_yaml(filename=None):
 
 
 @app.route("/run", methods=["POST"])
-@service.with_service_endpoint
 def run_workload():
     """Runs a workload."""
     oci_auth = get_authentication()
@@ -352,7 +366,7 @@ def run_workload():
         )
     try:
         yaml_string = urllib.parse.unquote(request.data[5:].decode())
-        yaml_string = render_template_string(yaml_string, **load_oci_config())
+        yaml_string = render_template_string(yaml_string, **get_config())
         workflow = yaml.safe_load(yaml_string)
 
         if workflow.get("kind") == "job":
@@ -396,11 +410,15 @@ def get_custom_metrics_namespace(job_run):
 
 
 def get_metrics_list(ocid):
-    job_run = DataScienceJobRun.from_ocid(ocid)
+    job_run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(ocid)
     custom_metric_namespace = get_custom_metrics_namespace(job_run)
     client = oci.monitoring.MonitoringClient(**get_authentication())
+    if "datasciencejobrunint" in ocid:
+        namespace = SERVICE_METRICS_NAMESPACE + "_integration"
+    else:
+        namespace = SERVICE_METRICS_NAMESPACE
     service_metrics = metric_query.list_job_run_metrics(
-        job_run, SERVICE_METRICS_NAMESPACE, SERVICE_METRICS_DIMENSION, client
+        job_run, namespace, SERVICE_METRICS_DIMENSION, client
     )
     if custom_metric_namespace:
         custom_metrics = metric_query.list_job_run_metrics(
@@ -433,7 +451,6 @@ def get_metrics_list(ocid):
 
 
 @app.route("/metrics/<ocid>")
-@service.with_service_endpoint
 def list_metrics(ocid):
     return jsonify(
         {
@@ -443,9 +460,8 @@ def list_metrics(ocid):
 
 
 @app.route("/metrics/<name>/<ocid>")
-@service.with_service_endpoint
 def get_metrics(name, ocid):
-    job_run = DataScienceJobRun.from_ocid(ocid)
+    job_run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(ocid)
     if name.startswith("gpu"):
         metric_namespace = get_custom_metrics_namespace(job_run)
         dimension = CUSTOM_METRICS_DIMENSION
@@ -500,34 +516,27 @@ def get_metrics(name, ocid):
 
 
 @app.route("/shapes/<compartment_ocid>")
-@handle_service_exception
-@service.with_service_endpoint
 def supported_shapes(compartment_ocid):
     """List supported shapes."""
+    client = oci.data_science.DataScienceClient(**get_ds_auth())
     shapes = [
         shape.name
-        for shape in DataScienceJob.instance_shapes(compartment_id=compartment_ocid)
+        for shape in oci.pagination.list_call_get_all_results(
+            client.list_job_shapes,
+            compartment_ocid,
+        ).data
     ]
     fast_launch_shapes = [
         shape.shape_name
-        for shape in DataScienceJob.fast_launch_shapes(compartment_id=compartment_ocid)
+        for shape in oci.pagination.list_call_get_all_results(
+            client.list_fast_launch_job_configs,
+            compartment_ocid,
+        ).data
     ]
     return jsonify(
         {
             "supported_shapes": shapes,
             "fast_launch_shapes": fast_launch_shapes,
-        }
-    )
-
-
-@app.route("/profiles", methods=["GET"])
-def list_profiles():
-    """List profiles."""
-    profiles = list(load_profiles().keys())
-    return jsonify(
-        {
-            "profiles": profiles,
-            "selected": session.get("profile", profiles[0] if profiles else None),
         }
     )
 
@@ -539,7 +548,34 @@ def select_profile():
     profile = data.get("profile")
     if profile:
         session["profile"] = profile
-    return jsonify({"profile": profile})
+    config = get_config(profile)
+    return jsonify(
+        {
+            "profile": config.get("profile"),
+            "compartment_id": config.get("compartment_id"),
+            "project_id": config.get("project_id"),
+        }
+    )
+
+
+@app.route("/profiles", methods=["GET"])
+def list_profiles():
+    """List profiles."""
+    profiles = list(CONFIG_MAP.configs.keys())
+    config = get_config()
+    return jsonify(
+        {
+            "profiles": profiles,
+            "profile": config.get("profile"),
+            "compartment_id": config.get("compartment_id"),
+            "project_id": config.get("project_id"),
+        }
+    )
+
+
+# @app.route("/profiles/<profile>", methods=["GET"])
+# def get_profile(profile):
+#     config = get_config(profile)
 
 
 @app.route("/authenticate/token/<profile>")

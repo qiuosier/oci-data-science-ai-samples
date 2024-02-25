@@ -1,12 +1,13 @@
 import os
 
 import ads
-import configparser
+
 import oci
 import requests
 
 from flask import request
 from commons.logs import logger
+from commons.config import CONFIG_MAP, CONST_OVERRIDE_TENANCY, get_endpoint, get_config
 
 ENV_OCI_KEY_PROFILE = "OCI_KEY_PROFILE"
 
@@ -47,14 +48,14 @@ def get_authentication(
     Exception
         When no authentication method is available.
     """
+
     if profile_name is None:
-        profile_name = request.args.get("profile")
+        profile_name = CONFIG_MAP.get_profile()
     if profile_name is None:
         profile_name = os.environ.get(ENV_OCI_KEY_PROFILE, oci.config.DEFAULT_PROFILE)
 
     if os.path.exists(os.path.expanduser(config_path)):
-        logger.info("Using OCI config: %s", config_path)
-        logger.info("Using OCI profile: %s", profile_name)
+        logger.info("Using OCI config: %s, profile: %s", config_path, profile_name)
         oci_config = oci.config.from_file(
             file_location=config_path, profile_name=profile_name
         )
@@ -85,31 +86,42 @@ def get_authentication(
         oci_auth = dict(config=oci_config, signer=signer)
     else:
         raise EnvironmentError("Cannot determine authentication method.")
-    ads.set_auth(**oci_auth)
+    # ads.set_auth(**oci_auth)
+
     return oci_auth
 
 
-def load_oci_config(
-    config_path=oci.config.DEFAULT_LOCATION,
-    profile_name=os.environ.get(ENV_OCI_KEY_PROFILE, oci.config.DEFAULT_PROFILE),
-):
-    """Loads OCI config if exists, otherwise return empty dictionary."""
-    if not os.path.exists(os.path.expanduser(config_path)):
-        return {}
-    oci_config = oci.config.from_file(
-        file_location=config_path, profile_name=profile_name
-    )
-    return oci_config
+def get_ds_auth(profile=None, client="oci"):
+    """Get the authentication and service endpoint."""
+    auth = get_authentication(profile_name=profile)
+    endpoint = get_endpoint(profile=profile)
+    if client == "oci":
+        auth["service_endpoint"] = endpoint
+    else:
+        auth["client_kwargs"] = {"service_endpoint": endpoint}
+    return auth
 
 
-def load_profiles(file_location=oci.config.DEFAULT_LOCATION):
-    expanded_file_location = oci.config._get_config_path_with_fallback(file_location)
-
-    parser = configparser.ConfigParser(interpolation=None)
-    if not parser.read(expanded_file_location):
-        raise oci.exceptions.ConfigFileNotFound(
-            f"Could not find config file at {expanded_file_location}, "
-            "please follow the instructions in the link to setup the config file "
-            "https://docs.cloud.oracle.com/en-us/iaas/Content/API/Concepts/sdkconfig.htm"
-        )
-    return {key: dict(parser[key]) for key in parser.keys()}
+def get_tenancy_ocid(auth=None):
+    """Get tenancy OCID."""
+    # Tenancy ID from GET parameters
+    tenancy_id = request.args.get("t")
+    if tenancy_id:
+        return tenancy_id
+    # Tenancy ID from custom config
+    config = get_config()
+    if config.get(CONST_OVERRIDE_TENANCY):
+        return config[CONST_OVERRIDE_TENANCY]
+    # Tenancy ID from OCI auth
+    if not auth:
+        auth = get_authentication()
+    if auth["config"]:
+        if "TENANCY_OCID" in os.environ:
+            tenancy_id = os.environ["TENANCY_OCID"]
+        elif "override_tenancy" in auth["config"]:
+            tenancy_id = auth["config"]["override_tenancy"]
+        else:
+            tenancy_id = auth["config"]["tenancy"]
+    else:
+        tenancy_id = getattr(auth["signer"], "tenancy_id", None)
+    return tenancy_id

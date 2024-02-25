@@ -7,9 +7,81 @@ const LOG_CHECKING_INTERVAL = 20000;
 const RUN_CHECKING_INTERVAL = 30000;
 var jobRunChecking = {};
 
+
+function getUrlParam(name) {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get(name);
+}
+
+
+function getJSON(url, parameters, success_callback) {
+  var dropdown = $("#profile");
+  if (dropdown.children('option').length > 0) {
+    parameters["profile"] = dropdown.val();
+  } else {
+    profile = getUrlParam("profile");
+    if (profile != null) parameters["profile"] = profile;
+  }
+  
+  url = url + "?" + $.param(parameters);
+  console.log(url);
+  return $.getJSON(url, success_callback);
+}
+
+function postJSON(url, data, success_callback, error_callback) {
+  return $.ajax({
+    type: "POST",
+    url: url,
+    data: JSON.stringify(data),
+    contentType: "application/json",
+    dataType: 'json',
+    success: success_callback,
+    error: error_callback
+  })
+}
+
+function switchProfile(data) {
+  console.log(data);
+  if (data.profile !== null) {
+    var href = new URL(window.location.href);
+    href.searchParams.set('profile', data.profile);
+    if (data.compartment_id != null) href.searchParams.set('c', data.compartment_id);
+    if (data.project_id != null) href.searchParams.set('p', data.project_id);
+    window.location.replace(href.toString());
+  }
+}
+
+function initWithProfile() {
+  var dropdown = $("#profile");
+  getJSON("/profiles", {}, function (data) {
+    
+    if (data.profiles.length > 0) {
+      data.profiles.forEach(element => {
+        if (element === data.profile) {
+          dropdown.append('<option value="' + element + '" selected>' + element + '</option>');
+        } else {
+          dropdown.append('<option value="' + element + '">' + element + '</option>');
+        }
+      });
+      const urlParams = new URLSearchParams(window.location.search);
+      const profile = urlParams.get('profile');
+      
+      if (profile != data.profile && data.profile !== null) {
+        switchProfile(data);
+      }
+      console.log("Using profile: " + profile)
+      dropdown.change(function() {
+        postJSON("/profiles", { "profile": dropdown.val() }, switchProfile)
+      });
+    };
+    initComponents();
+  });
+  
+}
+
 // This function is use to check if the authentication is done.
 function checkCompartments() {
-  $.getJSON("/compartments", function (data) {
+  getJSON("/compartments", {}, function (data) {
     if (data.error == null) {
       // Refresh the page to load the list of compartments.
       document.location.reload();
@@ -22,9 +94,14 @@ function checkCompartments() {
   })
 }
 
-function initComponents(compartmentId, projectId) {
+function initComponents() {
   var compartmentDropdown = $("#compartments");
   var projectDropdown = $("#projects");
+  var compartmentId = compartmentDropdown.val();
+  var projectId = $("#project_ocid").text();
+  console.log("COMPARTMENT ID: " + compartmentId);
+  console.log("PROJECT ID: " + projectId);
+
   console.log(compartmentDropdown.children('option').length);
   console.log(projectDropdown.children('option').length);
   // There is an authentication issue in this case
@@ -35,25 +112,35 @@ function initComponents(compartmentId, projectId) {
   ) {
     $("#alert-authentication").removeClass("d-none").find("span").text("Unable to load compartments.");
     checkCompartments();
+  } else {
+    // Load jobs
+    if (compartmentId && projectId != "None") {
+      loadJobs(compartmentId, projectId);
+    }
   }
 
   // Load the list of project in the compartment.
   compartmentDropdown.change(function () {
     var ocid = compartmentDropdown.val();
-    var serviceEndpoint = $("#service-endpoint").text();
-    $.getJSON("/projects/" + ocid + "?endpoint=" + serviceEndpoint, function (data) {
+    getJSON("/projects/" + ocid, {}, function (data) {
       projectDropdown.empty();
       console.log(projectId);
       if (projectId == "None" || projectId == "all") {
         projectDropdown.append('<option value="" selected="selected">Select Project</option>');
       }
+      var projectIdValid = false;
       data.projects.forEach(element => {
         if (element.ocid === projectId) {
           projectDropdown.append('<option value="' + element.ocid + '" selected>' + element.display_name + '</option>');
+          projectIdValid = true;
         } else {
           projectDropdown.append('<option value="' + element.ocid + '">' + element.display_name + '</option>');
         }
       });
+      if (!projectIdValid) {
+        $("#project_ocid").text("Invalid")
+        toastMessage("Invalid Project ID", "Project is not found in the compartment.");
+      }
     })
   })
   // Trigger the compartment change callback to load the list of projects.
@@ -72,7 +159,7 @@ function initComponents(compartmentId, projectId) {
 function updateLogs(ocid, outputDiv, stopped) {
   // console.log("Getting logs for " + ocid);
   // Get the most recent logs of each job
-  $.getJSON("/logs/" + ocid, function (data) {
+  getJSON("/logs/" + ocid, {}, function (data) {
     // console.log($("#" + ocid));
     var ansiUp = new AnsiUp;
     var htmlLogs = ansiUp.ansi_to_html(data.logs.join("\n"));
@@ -148,10 +235,9 @@ function loadJobs(compartmentId, projectId) {
   var existing_jobs = $("#dashboard-jobs .accordion-item .job-ocid").map(function () {
     return $(this).text();
   }).get();
-  var serviceEndpoint = $("#service-endpoint").text();
-  var apiEndpoint = "/jobs/" + compartmentId + "/" + projectId + "?limit=" + limit + "&endpoint=" + serviceEndpoint;
+  var apiEndpoint = "/jobs/" + compartmentId + "/" + projectId;
 
-  $.getJSON(apiEndpoint, function (data) {
+  getJSON(apiEndpoint, {"limit": limit}, function (data) {
     $("#alert-authentication").addClass("d-none");
     var timestampDiv = $("#dashboard-jobs").find(".job-timestamp:first");
     var timestamp = 0;
@@ -287,7 +373,7 @@ function updateMetrics(ocid) {
   if (ctx === null) return;
   // Find the name of the metric currently being displayed.
   const metricName = $(ctx).closest(".job-run-metrics").find(".dropdown-menu .d-none a").data("val");
-  $.getJSON("/metrics/" + metricName + "/" + ocid, function (data) {
+  getJSON("/metrics/" + metricName + "/" + ocid, {}, function (data) {
     // Refresh the list of the metrics
     const metricDropdown = $(ctx).closest(".job-run-metrics").find(".dropdown-menu");
     $.each(data.metrics, function (i, metric) {
@@ -348,9 +434,8 @@ function loadJobRuns(job_ocid) {
   var jobRow = jobAccordion.find(".row");
   if (jobRow.length === 0) return;
   jobRow.append("");
-  var serviceEndpoint = $("#service-endpoint").text();
   console.log("Loading job runs for job OCID: " + job_ocid);
-  $.getJSON("/job_runs/" + job_ocid + "?endpoint=" + serviceEndpoint, function (data) {
+  getJSON("/job_runs/" + job_ocid, {}, function (data) {
     if (jobRow.find(".col-xxl-4").length === 0) jobRow.empty();
     if (data.runs.length === 0) jobRow.text("No Job Run Found.");
     data.runs.reverse().forEach(run => {
@@ -407,7 +492,7 @@ function metricDropdownClicked(element) {
   const canvasId = metricDiv.find("canvas").attr("id");
   const ocid = metricDiv.closest(".run-monitor").attr("id");
   // Update the metric chart
-  $.getJSON("/metrics/" + metricLink.data("val") + "/" + ocid, function (data) {
+  getJSON("/metrics/" + metricLink.data("val") + "/" + ocid, {}, function (data) {
     var chart = Chart.getChart(canvasId);
     chart.data.labels = data.timestamps;
     chart.data.datasets = data.datasets;

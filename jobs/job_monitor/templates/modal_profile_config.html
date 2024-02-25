@@ -18,8 +18,13 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p>Profile Configurations</p>
-
+        <p>Profile Configurations - {{ config['profile'] }} </p>
+        <dl>
+          {% for k, v in config.items() %}
+          <dt>{{ k }}</dt>
+          <dd style="word-wrap: break-word;">{{ v }}</dd>
+          {% endfor %}
+        </dl>
 
       </div>
       <div class="modal-footer">
@@ -31,28 +36,3 @@
     </div>
   </div>
 </div>
-
-<script>
-  $(document).ready(function () {
-    var dropdown = $("#profile");
-    $.getJSON("/profiles", function (data) {
-      console.log(data.profiles);
-      data.profiles.forEach(element => {
-        if (element === data.selected) {
-          dropdown.append('<option value="' + element + '" selected>' + element + '</option>');
-        } else {
-          dropdown.append('<option value="' + element + '">' + element + '</option>');
-        }
-      });
-    });
-    dropdown.change(function () {
-      $.ajax({
-        type: "POST",
-        url: "/profiles",
-        data: JSON.stringify({ "profile": dropdown.val() }),
-        contentType: "application/json",
-        dataType: 'json',
-      })
-    })
-  })
-</script>

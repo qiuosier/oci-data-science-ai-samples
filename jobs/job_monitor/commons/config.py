@@ -1,9 +1,9 @@
 import json
 import os
-from flask import request
 
-
-from commons.auth import load_profiles, get_authentication
+import configparser
+import oci
+from flask import request, session
 
 
 CONFIG_FILE_PATH = os.path.expanduser("~/.oci/config.json")
@@ -12,9 +12,26 @@ CONST_YAML_DIR = "yaml_dir"
 CONST_OVERRIDE_TENANCY = "override_tenancy"
 
 
+def load_profiles(file_location=oci.config.DEFAULT_LOCATION):
+    expanded_file_location = oci.config._get_config_path_with_fallback(file_location)
+
+    parser = configparser.ConfigParser(interpolation=None)
+    if not parser.read(expanded_file_location):
+        raise oci.exceptions.ConfigFileNotFound(
+            f"Could not find config file at {expanded_file_location}, "
+            "please follow the instructions in the link to setup the config file "
+            "https://docs.cloud.oracle.com/en-us/iaas/Content/API/Concepts/sdkconfig.htm"
+        )
+    return {key: dict(parser[key]) for key in parser.keys()}
+
+
 class ConfigMap:
     def __init__(self, config_path=CONFIG_FILE_PATH) -> None:
-        self.configs = load_profiles()
+        try:
+            self.configs = load_profiles()
+        except oci.exceptions.ConfigFileNotFound:
+            self.configs = {}
+
         if os.path.exists(config_path):
             with open(config_path, "r", encoding="utf-8") as f:
                 custom_configs = json.load(f)
@@ -25,38 +42,33 @@ class ConfigMap:
 
     def get(self, profile=None) -> dict:
         if not profile:
-            profile = request.args.get("profile")
+            profile = self.get_profile()
         config = self.configs.get(profile, {})
         config["profile"] = profile
         return config
+
+    def get_profile(self):
+        profile = request.args.get("profile")
+        if profile:
+            return profile
+
+        if "profile" in session:
+            return session["profile"]
+        elif self.configs.keys():
+            session["profile"] = list(self.configs.keys())[0]
+            return session["profile"]
+        else:
+            return None
 
 
 CONFIG_MAP = ConfigMap()
 
 
-def get_config():
-    return CONFIG_MAP.get()
+def get_config(profile=None):
+    """Get custom configurations"""
+    return CONFIG_MAP.get(profile)
 
 
-def get_tenancy_ocid(auth=None):
-    # Tenancy ID from GET parameters
-    tenancy_id = request.args.get("t")
-    if tenancy_id:
-        return tenancy_id
-    # Tenancy ID from custom config
-    config = get_config()
-    if config.get(CONST_OVERRIDE_TENANCY):
-        return config[CONST_OVERRIDE_TENANCY]
-    # Tenancy ID from OCI auth
-    if not auth:
-        auth = get_authentication()
-    if auth["config"]:
-        if "TENANCY_OCID" in os.environ:
-            tenancy_id = os.environ["TENANCY_OCID"]
-        elif "override_tenancy" in auth["config"]:
-            tenancy_id = auth["config"]["override_tenancy"]
-        else:
-            tenancy_id = auth["config"]["tenancy"]
-    else:
-        tenancy_id = getattr(auth["signer"], "tenancy_id", None)
-    return tenancy_id
+def get_endpoint(profile=None):
+    """Get service endpoint"""
+    return get_config(profile).get(CONST_SERVICE_ENDPOINT)

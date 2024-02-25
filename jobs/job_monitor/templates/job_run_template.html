@@ -5,10 +5,11 @@
       <div>
         <div class="float-end" style="font-size: larger">
           <a href="#" onclick="downloadLogs('{{ run.id }}')"><i title="Download Logs" class="bi-download"></i></a>
-          <a href="#" data-bs-toggle="modal" data-bs-target="#modal-details-{{ run.id|replace('.', '') }}"><i title="Show YAML..."
-              class="bi-info-circle"></i></a>
+          <a href="#" data-bs-toggle="modal" data-bs-target="#modal-details-{{ run.id|replace('.', '') }}"><i
+              title="Show YAML..." class="bi-info-circle"></i></a>
           <a class="text-danger" href="#" data-bs-toggle="modal"
-            data-bs-target="#modal-delete-{{ run.id|replace('.', '') }}"><i title="Delete Job..." class="bi-x-lg"></i></a>
+            data-bs-target="#modal-delete-{{ run.id|replace('.', '') }}"><i title="Delete Job..."
+              class="bi-x-lg"></i></a>
         </div>
         <h4>
           <a style="color: inherit;" target="_blank"
@@ -29,7 +30,7 @@
     <div class="card-body logs" style="height: 500px; overflow: scroll;">
       <pre style="overflow: visible;">Loading Logs...</pre>
     </div>
-    
+
     <div class="card-footer job-run-metrics" style="height: 200px">
       {% include 'job_run_metrics.html' %}
     </div>
@@ -52,5 +53,5 @@
 
   {% include 'modal_job_run_yaml.html' %}
   {% include 'modal_job_run_delete.html' %}
-  
+
 </div>
