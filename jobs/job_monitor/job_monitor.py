@@ -370,7 +370,7 @@ def run_workload():
         workflow = yaml.safe_load(yaml_string)
 
         if workflow.get("kind") == "job":
-            job = Job.from_dict(workflow)
+            job = Job(**get_ds_auth(client="ads")).from_dict(workflow)
             job.create()
             logger.info("Created Job: %s", job.id)
             job_run = job.run()
