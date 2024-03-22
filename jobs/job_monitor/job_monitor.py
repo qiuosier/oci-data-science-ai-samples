@@ -60,17 +60,6 @@ app = Flask(
 app.secret_key = str(uuid.getnode())
 
 
-def check_endpoint():
-    endpoint = request.args.get("endpoint")
-    if endpoint:
-        OCIDataScienceMixin.kwargs = {"service_endpoint": endpoint}
-        os.environ["OCI_ODSC_SERVICE_ENDPOINT"] = endpoint
-    else:
-        OCIDataScienceMixin.kwargs = None
-        os.environ.pop("OCI_ODSC_SERVICE_ENDPOINT", None)
-    return endpoint
-
-
 def init_components():
     """Load compartments, project_id, limit and endpoint."""
     compartment_id = request.args.get("c")
@@ -610,8 +599,9 @@ def storage_namespace():
 
 
 @app.route("/studio")
-def studio_dashboard():
+def studio_home():
     context = init_components()
+    context["title"] = "My Studio"
     return render_template("studio.html", **context)
 
 

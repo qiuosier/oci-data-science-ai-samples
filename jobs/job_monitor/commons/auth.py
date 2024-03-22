@@ -95,10 +95,11 @@ def get_ds_auth(profile=None, client="oci"):
     """Get the authentication and service endpoint."""
     auth = get_authentication(profile_name=profile)
     endpoint = get_endpoint(profile=profile)
-    if client == "oci":
-        auth["service_endpoint"] = endpoint
-    else:
-        auth["client_kwargs"] = {"service_endpoint": endpoint}
+    if endpoint:
+        if client == "oci":
+            auth["service_endpoint"] = endpoint
+        else:
+            auth["client_kwargs"] = {"service_endpoint": endpoint}
     return auth
 
 
