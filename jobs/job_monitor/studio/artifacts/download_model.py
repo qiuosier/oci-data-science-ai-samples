@@ -8,7 +8,7 @@
 https://huggingface.co/docs/huggingface_hub/guides/download#download-an-entire-repository
 Set the HUGGING_FACE_HUB_TOKEN environment variable if it is required to access the model.
 """
-import json
+
 import os
 import sys
 from huggingface_hub import snapshot_download
