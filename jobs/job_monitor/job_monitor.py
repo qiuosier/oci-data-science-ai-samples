@@ -20,9 +20,7 @@ from flask import (
     session,
 )
 
-
-from ads.common.oci_datascience import OCIDataScienceMixin
-from ads.jobs import DataScienceJobRun, Job, DataScienceJob
+from ads.jobs import DataScienceJobRun, Job
 from ads.model.datascience_model import DataScienceModel
 from ads.common.object_storage_details import ObjectStorageDetails
 
@@ -132,6 +130,7 @@ def favicon():
 def job_monitor():
     """Landing Page."""
     context = init_components()
+    context["title"] = "Job Monitor"
     return render_template("job_monitor.html", **context)
 
 
