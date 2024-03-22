@@ -22,7 +22,7 @@ function getJSON(url, parameters, success_callback) {
     profile = getUrlParam("profile");
     if (profile != null) parameters["profile"] = profile;
   }
-  
+
   url = url + "?" + $.param(parameters);
   console.log(url);
   return $.getJSON(url, success_callback);
@@ -51,10 +51,10 @@ function switchProfile(data) {
   }
 }
 
-function initWithProfile() {
+function initWithProfile(callback) {
   var dropdown = $("#profile");
   getJSON("/profiles", {}, function (data) {
-    
+
     if (data.profiles.length > 0) {
       data.profiles.forEach(element => {
         if (element === data.profile) {
@@ -65,18 +65,18 @@ function initWithProfile() {
       });
       const urlParams = new URLSearchParams(window.location.search);
       const profile = urlParams.get('profile');
-      
+
       if (profile != data.profile && data.profile !== null) {
         switchProfile(data);
       }
       console.log("Using profile: " + profile)
-      dropdown.change(function() {
+      dropdown.change(function () {
         postJSON("/profiles", { "profile": dropdown.val() }, switchProfile)
       });
     };
-    initComponents();
+    initComponents(callback);
   });
-  
+
 }
 
 // This function is use to check if the authentication is done.
@@ -94,7 +94,16 @@ function checkCompartments() {
   })
 }
 
-function initComponents() {
+function initJobMonitor() {
+  // Load jobs
+  var compartmentId = $("#compartments").val();
+  var projectId = $("#project_ocid").text();
+  if (compartmentId && projectId != "None") {
+    loadJobs(compartmentId, projectId);
+  }
+}
+
+function initComponents(callback) {
   var compartmentDropdown = $("#compartments");
   var projectDropdown = $("#projects");
   var compartmentId = compartmentDropdown.val();
@@ -113,10 +122,7 @@ function initComponents() {
     $("#alert-authentication").removeClass("d-none").find("span").text("Unable to load compartments.");
     checkCompartments();
   } else {
-    // Load jobs
-    if (compartmentId && projectId != "None") {
-      loadJobs(compartmentId, projectId);
-    }
+    callback()
   }
 
   // Load the list of project in the compartment.
@@ -145,7 +151,7 @@ function initComponents() {
   })
   // Trigger the compartment change callback to load the list of projects.
   if (compartmentId) compartmentDropdown.change();
-  // Refresh the page to see jobs when project is changed.
+  // Refresh the page to when project is changed.
   projectDropdown.change(function () {
     projectId = projectDropdown.val();
     compartmentId = compartmentDropdown.val();
@@ -237,7 +243,7 @@ function loadJobs(compartmentId, projectId) {
   }).get();
   var apiEndpoint = "/jobs/" + compartmentId + "/" + projectId;
 
-  getJSON(apiEndpoint, {"limit": limit}, function (data) {
+  getJSON(apiEndpoint, { "limit": limit }, function (data) {
     $("#alert-authentication").addClass("d-none");
     var timestampDiv = $("#dashboard-jobs").find(".job-timestamp:first");
     var timestamp = 0;

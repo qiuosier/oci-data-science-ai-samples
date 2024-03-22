@@ -101,7 +101,7 @@
 
           var compartment_id = $("#compartments").val();
           if (compartment_id != null) {
-            $.get("/shapes/" + $("#compartments").val(), function (data) {
+            getJSON("/shapes/" + $("#compartments").val(), {}, function (data) {
               $("#collapseSupportedShapes").find(".shape-names").text(data.supported_shapes.join(", "));
               $("#collapseFastLaunchShapes").find(".shape-names").text(data.fast_launch_shapes.join(", "));
             })
@@ -127,7 +127,7 @@
             $.ajax({
               type: "POST",
               contentType: "application/json",
-              url: "/run?endpoint=" + endpoint,
+              url: "/run?profile=" + $("#profile").val(),
               data: { yaml: editor.getValue() },
             }).fail(function (data) {
               toastMessage("Error", data.responseJSON.error);
