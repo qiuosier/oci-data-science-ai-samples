@@ -121,8 +121,10 @@ function initComponents(callback) {
   ) {
     $("#alert-authentication").removeClass("d-none").find("span").text("Unable to load compartments.");
     checkCompartments();
+  } else if (typeof callback === 'function') {
+    callback();
   } else {
-    callback()
+    console.log("Init callback is not a function.")
   }
 
   // Load the list of project in the compartment.

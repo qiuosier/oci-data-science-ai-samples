@@ -25,15 +25,15 @@ from ads.model.datascience_model import DataScienceModel
 from ads.common.object_storage_details import ObjectStorageDetails
 
 import metric_query
-from commons import service
 from commons.auth import (
     get_authentication,
     get_ds_auth,
     get_tenancy_ocid,
 )
+from commons.components import init_components
 from commons.logs import logger
 from commons.errors import abort_with_json_error, handle_service_exception
-from commons.config import get_config, get_endpoint, CONST_YAML_DIR, CONFIG_MAP
+from commons.config import get_config, CONST_YAML_DIR, CONFIG_MAP
 from commons.validation import (
     check_ocid,
     check_compartment_project,
@@ -42,6 +42,7 @@ from commons.validation import (
 )
 from studio import jobs as studio_jobs
 from studio.models import StudioModel
+from studio.views import studio_views
 
 
 SERVICE_METRICS_NAMESPACE = "oci_datascience_jobrun"
@@ -56,68 +57,6 @@ app = Flask(
 )
 # Use hardware address as secret key so it will likely be unique for each computer.
 app.secret_key = str(uuid.getnode())
-
-
-def init_components():
-    """Load compartments, project_id, limit and endpoint."""
-    compartment_id = request.args.get("c")
-    project_id = request.args.get("p")
-    limit = request.args.get("limit", 10)
-
-    config = get_config()
-    endpoint = get_endpoint()
-
-    if project_id:
-        compartment_id, project_id = check_compartment_project(
-            compartment_id, project_id
-        )
-    else:
-        compartment_id = None
-
-    auth = get_authentication()
-    tenancy_ocid = get_tenancy_ocid(auth)
-    logger.debug("Tenancy ID: %s", tenancy_ocid)
-    client = oci.identity.IdentityClient(**auth)
-    compartments = []
-    error = None
-    # User may not have permissions to list compartment.
-    try:
-        compartments.extend(
-            service.list_all_sub_compartments(client, compartment_id=tenancy_ocid)
-        )
-    except oci.exceptions.ServiceError:
-        traceback.print_exc()
-        error = f"ERROR: Unable to list all sub compartment in tenancy {tenancy_ocid}."
-        try:
-            compartments.append(
-                service.list_all_child_compartments(client, compartment_id=tenancy_ocid)
-            )
-        except oci.exceptions.ServiceError:
-            traceback.print_exc()
-            error = f"ERROR: Unable to list all child compartment in tenancy {tenancy_ocid}."
-    try:
-        root_compartment = client.get_compartment(tenancy_ocid).data
-        compartments.insert(0, root_compartment)
-    except oci.exceptions.ServiceError:
-        traceback.print_exc()
-        error = f"ERROR: Unable to get details of the root compartment {tenancy_ocid}."
-        if compartments:
-            compartments.insert(
-                0,
-                oci.identity.models.Compartment(
-                    id=tenancy_ocid, name=" ** Root - Name N/A **"
-                ),
-            )
-    context = dict(
-        compartment_id=compartment_id,
-        project_id=project_id,
-        compartments=compartments,
-        limit=limit,
-        service_endpoint=endpoint,
-        error=error,
-        config=config,
-    )
-    return context
 
 
 @app.route("/favicon.ico")
@@ -677,3 +616,6 @@ def verify_model(ocid):
         run = DataScienceJobRun.from_ocid(job_run_id)
         metadata["download_status"]["job_run_status"] = run.status
     return jsonify(metadata)
+
+
+app.register_blueprint(studio_views, url_prefix="/studio")
