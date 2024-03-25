@@ -5,7 +5,7 @@ from flask import abort, jsonify, make_response
 
 
 def abort_with_json_error(code, message):
-    abort(make_response(jsonify(error=message), code))
+    abort(make_response(jsonify(error=code, message=message), code))
 
 
 def handle_service_exception(func):

@@ -14,7 +14,7 @@ function getUrlParam(name) {
 }
 
 
-function getJSON(url, parameters, success_callback) {
+function getJSON(url, parameters, success_callback, error_callback) {
   var dropdown = $("#profile");
   if (dropdown.children('option').length > 0) {
     parameters["profile"] = dropdown.val();
@@ -24,8 +24,16 @@ function getJSON(url, parameters, success_callback) {
   }
 
   url = url + "?" + $.param(parameters);
-  console.log(url);
-  return $.getJSON(url, success_callback);
+  // console.log(url);
+  return $.ajax({
+    type: "GET",
+    url: url,
+    contentType: "application/json",
+    dataType: 'json',
+    success: success_callback,
+    error: function (xhr) { error_callback(xhr.responseJSON) }
+  })
+  //return $.getJSON(url, success_callback).error();
 }
 
 function postJSON(url, data, success_callback, error_callback) {
@@ -132,7 +140,7 @@ function initComponents(callback) {
     var ocid = compartmentDropdown.val();
     getJSON("/projects/" + ocid, {}, function (data) {
       projectDropdown.empty();
-      console.log(projectId);
+      // console.log(projectId);
       if (projectId == "None" || projectId == "all") {
         projectDropdown.append('<option value="" selected="selected">Select Project</option>');
       }
@@ -278,7 +286,7 @@ function loadJobs(compartmentId, projectId) {
         }
         // Load job runs only when the accordion is opened.
         $('#' + job.ocid.replaceAll(".", "")).on('shown.bs.collapse', function () {
-          loadJobRuns(job.ocid);
+          checkAndLoadJobRuns(job.ocid);
         })
       }
     });
@@ -428,7 +436,27 @@ function addJobRun(jobRow, run) {
   }
 }
 
-function loadJobRuns(job_ocid) {
+function loadJobRuns(endpoint, jobRow) {
+  getJSON(
+    endpoint, {},
+    // success
+    function (data) {
+      if (jobRow.find(".col-xxl-4").length === 0) jobRow.empty();
+      if (data.runs.length === 0) jobRow.text("No Job Run Found.");
+      data.runs.reverse().forEach(run => {
+        addJobRun(jobRow, run);
+      });
+    },
+    // error
+    function (data) {
+      if (data.message !== undefined) {
+        jobRow.text(data.message);
+      } else jobRow.text("No Job Run Found.");
+    }
+  );
+}
+
+function checkAndLoadJobRuns(job_ocid) {
   const RUNNING = "running"
   // Avoid running the same function twice
   if (typeof (jobRunChecking[job_ocid]) === RUNNING) return;
@@ -452,7 +480,7 @@ function loadJobRuns(job_ocid) {
   });
 
   jobRunChecking[job_ocid] = setTimeout(function () {
-    loadJobRuns(job_ocid);
+    checkAndLoadJobRuns(job_ocid);
     // Check if there is new job run for the job in about 30 seconds.
     // Add a random number to the time interval so that not all requests are send at the same time.
   }, RUN_CHECKING_INTERVAL);
