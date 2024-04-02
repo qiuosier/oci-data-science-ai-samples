@@ -25,22 +25,8 @@ app = Flask(
 app.secret_key = str(uuid.getnode())
 
 
-def init_components():
-    """Load compartments, project_id, limit and endpoint."""
-    compartment_id = request.args.get("c")
-    project_id = request.args.get("p")
-    limit = request.args.get("limit", 10)
-
-    config = get_config()
-    endpoint = get_endpoint()
-
-    if project_id:
-        compartment_id, project_id = check_compartment_project(
-            compartment_id, project_id
-        )
-    else:
-        compartment_id = None
-
+def get_compartments():
+    """Gets the compartments in the tenancy."""
     auth = get_authentication()
     tenancy_ocid = get_tenancy_ocid(auth)
     logger.debug("Tenancy ID: %s", tenancy_ocid)
@@ -75,13 +61,35 @@ def init_components():
                     id=tenancy_ocid, name=" ** Root - Name N/A **"
                 ),
             )
+    return {"compartments": compartments, "error": error}
+
+
+def base_context():
+    """Load compartments, project_id, limit and endpoint."""
+    compartment_id = request.args.get("c")
+    project_id = request.args.get("p")
+    limit = request.args.get("limit", 10)
+
+    config = get_config()
+    endpoint = get_endpoint()
+
+    if project_id:
+        compartment_id, project_id = check_compartment_project(
+            compartment_id, project_id
+        )
+    else:
+        compartment_id = None
+
     context = dict(
         compartment_id=compartment_id,
         project_id=project_id,
-        compartments=compartments,
         limit=limit,
         service_endpoint=endpoint,
-        error=error,
         config=config,
     )
+    return context
+
+def base_context_with_compartments():
+    context = base_context()
+    context.update(get_compartments())
     return context

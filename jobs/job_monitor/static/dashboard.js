@@ -13,6 +13,10 @@ function getUrlParam(name) {
   return urlParams.get(name);
 }
 
+function showAuthenticationAlert(data) {
+  $("#alert-authentication").removeClass("d-none").find("span").text(data.message);
+}
+
 
 function getJSON(url, parameters, success_callback, error_callback) {
   var dropdown = $("#profile");
@@ -31,7 +35,10 @@ function getJSON(url, parameters, success_callback, error_callback) {
     contentType: "application/json",
     dataType: 'json',
     success: success_callback,
-    error: function (xhr) { error_callback(xhr.responseJSON) }
+    error: function (xhr) {
+      if (xhr.status === 401) showAuthenticationAlert(xhr.responseJSON)
+      if (error_callback !== undefined) error_callback(xhr.responseJSON);
+    }
   })
   //return $.getJSON(url, success_callback).error();
 }
@@ -88,26 +95,34 @@ function initWithProfile(callback) {
 }
 
 // This function is use to check if the authentication is done.
-function checkCompartments() {
-  getJSON("/compartments", {}, function (data) {
-    if (data.error == null) {
-      // Refresh the page to load the list of compartments.
-      document.location.reload();
-    } else {
+function checkTenancy() {
+  getJSON(
+    "/tenancy",
+    {},
+    function (data) {
+      if (data.error == null) {
+        // Refresh the page to load the list of compartments.
+        document.location.reload();
+      }
+    },
+    function () {
       // Check again in a few seconds.
       setTimeout(function () {
-        checkCompartments();
+        checkTenancy();
       }, 10000);
-    };
-  })
+    }
+  )
 }
 
 function initJobMonitor() {
   // Load jobs
-  var compartmentId = $("#compartments").val();
+  var compartmentDropdown = $("#compartments");
+  var compartmentId = compartmentDropdown.val();
   var projectId = $("#project_ocid").text();
   if (compartmentId && projectId != "None") {
     loadJobs(compartmentId, projectId);
+  } else if (compartmentDropdown.children('option').length == 0) {
+    checkTenancy();
   }
 }
 
@@ -121,23 +136,17 @@ function initComponents(callback) {
 
   console.log(compartmentDropdown.children('option').length);
   console.log(projectDropdown.children('option').length);
-  // There is an authentication issue in this case
-  if (compartmentDropdown.children('option').length <= 1 &&
-    projectDropdown.children('option').length === 0 &&
-    !compartmentDropdown.val() &&
-    !projectDropdown.val()
-  ) {
-    $("#alert-authentication").removeClass("d-none").find("span").text("Unable to load compartments.");
-    checkCompartments();
-  } else if (typeof callback === 'function') {
+
+  if (typeof callback === 'function') {
     callback();
   } else {
-    console.log("Init callback is not a function.")
+    console.log("Init callback is not a function.");
   }
 
   // Load the list of project in the compartment.
   compartmentDropdown.change(function () {
     var ocid = compartmentDropdown.val();
+    if (ocid === "") return;
     getJSON("/projects/" + ocid, {}, function (data) {
       projectDropdown.empty();
       // console.log(projectId);
@@ -164,6 +173,7 @@ function initComponents(callback) {
   // Refresh the page to when project is changed.
   projectDropdown.change(function () {
     projectId = projectDropdown.val();
+    if (projectId === "") return;
     compartmentId = compartmentDropdown.val();
     var url = new URL(window.location.href);
     url.searchParams.set('c', compartmentId);
@@ -253,60 +263,63 @@ function loadJobs(compartmentId, projectId) {
   }).get();
   var apiEndpoint = "/jobs/" + compartmentId + "/" + projectId;
 
-  getJSON(apiEndpoint, { "limit": limit }, function (data) {
-    $("#alert-authentication").addClass("d-none");
-    var timestampDiv = $("#dashboard-jobs").find(".job-timestamp:first");
-    var timestamp = 0;
-    var jobs = data.jobs;
-    // No job found
-    if (jobs.length === 0) {
-      // Wait for the projects dropdown to be populated so that we can get the project name.
-      setTimeout(() => {
-        var compartmentName = $("#compartments option[value='" + compartmentId + "']").text();
-        var projectName = $("#projects option[value='" + projectId + "']").text();
-        console.log("No job found in compartment: " + compartmentId + ", project: " + projectId);
-        toastMessage("No Job", "There is no job in " + compartmentName + "/" + projectName);
-      }, 2000);
-      return;
-    }
-    var prepended = false;
-    if (timestampDiv.length !== 0) {
-      timestamp = parseFloat(timestampDiv.text())
-      jobs = jobs.reverse();
-    }
-    // Add jobs based on the time created
-    jobs.forEach(job => {
-      if (existing_jobs.indexOf(job.ocid) < 0 && job.time_created > timestamp) {
-        console.log("Loading job: " + job.ocid);
-        if (timestamp > 0) {
-          $("#dashboard-jobs").prepend(job.html);
-          prepended = true;
-        } else {
-          $("#dashboard-jobs").append(job.html);
-        }
-        // Load job runs only when the accordion is opened.
-        $('#' + job.ocid.replaceAll(".", "")).on('shown.bs.collapse', function () {
-          checkAndLoadJobRuns(job.ocid);
-        })
+  getJSON(
+    apiEndpoint,
+    { "limit": limit },
+    function (data) {
+      $("#alert-authentication").addClass("d-none");
+      var timestampDiv = $("#dashboard-jobs").find(".job-timestamp:first");
+      var timestamp = 0;
+      var jobs = data.jobs;
+      // No job found
+      if (jobs.length === 0) {
+        // Wait for the projects dropdown to be populated so that we can get the project name.
+        setTimeout(() => {
+          var compartmentName = $("#compartments option[value='" + compartmentId + "']").text();
+          var projectName = $("#projects option[value='" + projectId + "']").text();
+          console.log("No job found in compartment: " + compartmentId + ", project: " + projectId);
+          toastMessage("No Job", "There is no job in " + compartmentName + "/" + projectName);
+        }, 2000);
+        return;
       }
-    });
-    // Open the first accordion in the page
-    // If user is opening loading the jobs for the first time or new job added recently
-    if (existing_jobs.length === 0 || prepended) {
-      new bootstrap.Collapse(
-        document.getElementsByClassName('accordion-collapse collapse')[0],
-        { toggle: true }
-      );
+      var prepended = false;
+      if (timestampDiv.length !== 0) {
+        timestamp = parseFloat(timestampDiv.text())
+        jobs = jobs.reverse();
+      }
+      // Add jobs based on the time created
+      jobs.forEach(job => {
+        if (existing_jobs.indexOf(job.ocid) < 0 && job.time_created > timestamp) {
+          console.log("Loading job: " + job.ocid);
+          if (timestamp > 0) {
+            $("#dashboard-jobs").prepend(job.html);
+            prepended = true;
+          } else {
+            $("#dashboard-jobs").append(job.html);
+          }
+          // Load job runs only when the accordion is opened.
+          $('#' + job.ocid.replaceAll(".", "")).on('shown.bs.collapse', function () {
+            checkAndLoadJobRuns(job.ocid);
+          })
+        }
+      });
+      // Open the first accordion in the page
+      // If user is opening loading the jobs for the first time or new job added recently
+      if (existing_jobs.length === 0 || prepended) {
+        new bootstrap.Collapse(
+          document.getElementsByClassName('accordion-collapse collapse')[0],
+          { toggle: true }
+        );
+      }
+    },
+    function (data) {
+      if (data.error == 401) {
+        $("#alert-authentication").removeClass("d-none").find("span").text(data.message);
+      } else {
+        toastMessage(data.error, data.message);
+      }
     }
-
-  }).fail(function (jqxhr, textStatus, error) {
-    var data = jqxhr.responseJSON;
-    if (error == "UNAUTHORIZED") {
-      $("#alert-authentication").removeClass("d-none").find("span").text(data.message);
-    } else {
-      toastMessage(data.error, data.message);
-    }
-  });
+  );
   // Reload the list of jobs every 20 seconds.
   setTimeout(function () {
     loadJobs(compartmentId, projectId);

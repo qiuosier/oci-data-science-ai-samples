@@ -2,7 +2,7 @@
   <div class="form-group">
     <label for="compartments">Compartment</label>
     <select class="form-control" name="compartments" id="compartments">
-      {% if not compartment_id %}
+      {% if compartments and not compartment_id %}
       <option value="" selected="selected">Select Compartment</option>
       {% endif %}
       {% for compartment in compartments %}

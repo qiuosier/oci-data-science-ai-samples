@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, jsonify
 from ads.jobs import DataScienceJobRun
 from commons.auth import get_ds_auth
-from commons.components import init_components
+from commons.components import base_context
 from commons.errors import abort_with_json_error, handle_service_exception
 from commons.validation import check_ocid
 
@@ -14,7 +14,7 @@ studio_views = Blueprint("studio", __name__, template_folder="templates")
 def view_job(ocid=""):
     if ocid:
         check_ocid(ocid)
-    context = init_components()
+    context = base_context()
     context["title"] = "Job"
     context["ocid"] = ocid
     return render_template("view_job.html", **context)

@@ -130,7 +130,7 @@
               url: "/run?profile=" + $("#profile").val(),
               data: { yaml: editor.getValue() },
             }).fail(function (data) {
-              toastMessage("Error", data.responseJSON.error);
+              toastMessage("Error", data.responseJSON.message);
             }).done(function (data) {
               toastMessage(
                 "Job Created",

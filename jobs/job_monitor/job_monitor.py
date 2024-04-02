@@ -30,7 +30,7 @@ from commons.auth import (
     get_ds_auth,
     get_tenancy_ocid,
 )
-from commons.components import init_components
+from commons.components import base_context, base_context_with_compartments
 from commons.logs import logger
 from commons.errors import abort_with_json_error, handle_service_exception
 from commons.config import get_config, CONST_YAML_DIR, CONFIG_MAP
@@ -68,15 +68,31 @@ def favicon():
 @app.route("/")
 def job_monitor():
     """Landing Page."""
-    context = init_components()
+    context = base_context_with_compartments()
     context["title"] = "Job Monitor"
     return render_template("job_monitor.html", **context)
+
+
+@app.route("/tenancy")
+@handle_service_exception
+def get_tenancy():
+    """Gets the information of the tenancy."""
+    auth = get_authentication()
+    return jsonify(
+        json.loads(
+            str(
+                oci.identity.IdentityClient(**auth)
+                .get_tenancy(auth["config"].get("tenancy", ""))
+                .data
+            )
+        )
+    )
 
 
 @app.route("/compartments")
 def list_compartments():
     """List compartments."""
-    context = init_components()
+    context = base_context_with_compartments()
     compartments = [compartment.id for compartment in context["compartments"]]
     return jsonify({"compartments": compartments, "error": context["error"]})
 
@@ -538,7 +554,7 @@ def storage_namespace():
 
 @app.route("/studio")
 def studio_home():
-    context = init_components()
+    context = base_context_with_compartments()
     context["title"] = "My Studio"
     return render_template("studio.html", **context)
 
