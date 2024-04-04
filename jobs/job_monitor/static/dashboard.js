@@ -36,8 +36,10 @@ function getJSON(url, parameters, success_callback, error_callback) {
     dataType: 'json',
     success: success_callback,
     error: function (xhr) {
-      if (xhr.status === 401) showAuthenticationAlert(xhr.responseJSON)
-      if (error_callback !== undefined) error_callback(xhr.responseJSON);
+      if (xhr.status === 0) toastMessage("Connection Error", "Check Backend App and Connection.")
+      if (xhr.status === 401) showAuthenticationAlert(xhr.responseJSON);
+      if (error_callback !== undefined && xhr.responseJSON !== undefined) error_callback(xhr.responseJSON);
+      else console.error(xhr);
     }
   })
   //return $.getJSON(url, success_callback).error();

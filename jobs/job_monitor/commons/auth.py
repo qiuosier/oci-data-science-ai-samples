@@ -55,7 +55,7 @@ def get_authentication(
         profile_name = os.environ.get(ENV_OCI_KEY_PROFILE, oci.config.DEFAULT_PROFILE)
 
     if os.path.exists(os.path.expanduser(config_path)):
-        logger.info("Using OCI config: %s, profile: %s", config_path, profile_name)
+        logger.debug("Using OCI config: %s, profile: %s", config_path, profile_name)
         oci_config = oci.config.from_file(
             file_location=config_path, profile_name=profile_name
         )

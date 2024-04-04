@@ -30,7 +30,7 @@ from commons.auth import (
     get_ds_auth,
     get_tenancy_ocid,
 )
-from commons.components import base_context, base_context_with_compartments
+from commons.components import base_context_with_compartments
 from commons.logs import logger
 from commons.errors import abort_with_json_error, handle_service_exception
 from commons.config import get_config, CONST_YAML_DIR, CONFIG_MAP
@@ -43,13 +43,17 @@ from commons.validation import (
 from studio import jobs as studio_jobs
 from studio.models import StudioModel
 from studio.views import studio_views
+from garden.jobs import JobLogManager
 
 
 SERVICE_METRICS_NAMESPACE = "oci_datascience_jobrun"
 SERVICE_METRICS_DIMENSION = "resourceId"
 CUSTOM_METRICS_NAMESPACE_ENV = "OCI__METRICS_NAMESPACE"
 CUSTOM_METRICS_DIMENSION = metric_query.CUSTOM_METRIC_OCID_DIMENSION
+CACHE_LOCATION = os.path.join(os.path.dirname(__file__), ".cache")
 
+
+job_log_manager = JobLogManager(os.path.join(CACHE_LOCATION, "logs"))
 
 # Flask templates location
 app = Flask(
@@ -188,41 +192,10 @@ def list_job_runs(job_id):
     return jsonify({"runs": run_list})
 
 
-def format_logs(logs):
-    """Reformat logs from job run."""
-    for log in logs:
-        if str(log["time"]).endswith("Z"):
-            log["time"] = log["time"].split(".")[0].replace("T", " ")
-        else:
-            log["time"] = str(log["time"])
-    logs = sorted(logs, key=lambda x: x["time"] if x["time"] else "")
-    logs = [str(log["time"]) + " " + log["message"] for log in logs]
-    return logs
-
-
 @app.route("/logs/<job_run_ocid>")
 def get_logs(job_run_ocid):
     """Get logs for a job run."""
-    logger.debug("Getting logs for %s", job_run_ocid)
-    run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(job_run_ocid)
-    logger.debug("Job Run Status: %s - %s", run.lifecycle_state, run.lifecycle_details)
-    if not run.log_id:
-        logs = []
-    else:
-        try:
-            logs = run.logs()
-            logs = format_logs(logs)
-        except Exception:
-            traceback.print_exc()
-            logs = []
-    logger.debug("%s - %s log messages.", job_run_ocid, str(len(logs)))
-    context = {
-        "ocid": job_run_ocid,
-        "logs": logs,
-        "status": run.lifecycle_state,
-        "statusDetails": run.lifecycle_details,
-        "stopped": (run.lifecycle_state in DataScienceJobRun.TERMINAL_STATES),
-    }
+    context = job_log_manager.get(job_run_ocid)
     return jsonify(context)
 
 
