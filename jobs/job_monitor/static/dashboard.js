@@ -300,8 +300,8 @@ function loadJobs(compartmentId, projectId) {
             $("#dashboard-jobs").append(job.html);
           }
           // Load job runs only when the accordion is opened.
-          $('#' + job.ocid.replaceAll(".", "")).on('shown.bs.collapse', function () {
-            checkAndLoadJobRuns(job.ocid);
+          $('#' + job.ocid.replaceAll(".", "")).on('shown.bs.collapse', function (e) {
+            if ($(e.target).hasClass("accordion-job")) checkAndLoadJobRuns(job.ocid);
           })
         }
       });
@@ -430,11 +430,17 @@ function addJobRun(jobRow, run) {
   runDiv = jobRow.find(jobRunSelector);
   // Add job run panel if one does not exist.
   if (runDiv.length === 0) {
-    console.log("Adding job run: " + run.ocid);
+    // console.log("Adding job run: " + run.ocid);
     jobRow.prepend(run.html);
     runDiv = jobRow.find(jobRunSelector);
-    runDiv.find("code").each(function () {
-      hljs.highlightElement(this);
+
+    // YAML callback
+    getJSON("/job_run_yaml/" + run.ocid, {}, function (data) {
+      runDiv.find(".job-yaml").text(data.job_yaml);
+      runDiv.find(".job-run-yaml").text(data.job_run_yaml);
+      runDiv.find("code").each(function () {
+        hljs.highlightElement(this);
+      })
     })
     // Metric dropdown callback
     $(jobRunSelector + " .job-run-metrics").on("click", "a", function (e) {
@@ -486,9 +492,12 @@ function checkAndLoadJobRuns(job_ocid) {
   if (jobRow.length === 0) return;
   jobRow.append("");
   console.log("Loading job runs for job OCID: " + job_ocid);
+  var startTime = performance.now();
   getJSON("/job_runs/" + job_ocid, {}, function (data) {
     if (jobRow.find(".col-xxl-4").length === 0) jobRow.empty();
     if (data.runs.length === 0) jobRow.text("No Job Run Found.");
+    var endTime = performance.now();
+    console.log(`Load job run: ${endTime - startTime} milliseconds`);
     data.runs.reverse().forEach(run => {
       addJobRun(jobRow, run);
     });

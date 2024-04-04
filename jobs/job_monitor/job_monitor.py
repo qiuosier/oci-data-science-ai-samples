@@ -179,10 +179,8 @@ def list_job_runs(job_id):
     # ).data
     # runs = [DSJobRun.from_oci_model(item) for item in items]
     run_list = []
+    runs = [run for run in runs if run.status != "DELETED"]
     for run in runs:
-        if run.status == "DELETED":
-            continue
-        # run._job = job
         run_data = {
             "ocid": run.id,
             "job_ocid": job.id,
@@ -190,6 +188,14 @@ def list_job_runs(job_id):
         }
         run_list.append(run_data)
     return jsonify({"runs": run_list})
+
+
+@app.route("/job_run_yaml/<ocid>")
+def get_job_run_yaml(ocid):
+    if not is_valid_ocid("datasciencejobrun", ocid):
+        abort_with_json_error(400, "Invalid OCID.")
+    run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(ocid)
+    return jsonify({"job_yaml": str(run.job), "job_run_yaml": str(run)})
 
 
 @app.route("/logs/<job_run_ocid>")
