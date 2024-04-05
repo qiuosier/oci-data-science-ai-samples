@@ -430,12 +430,12 @@ function addJobRun(jobRow, run) {
   runDiv = jobRow.find(jobRunSelector);
   // Add job run panel if one does not exist.
   if (runDiv.length === 0) {
-    // console.log("Adding job run: " + run.ocid);
+    console.log("Adding job run: " + run.ocid);
     jobRow.prepend(run.html);
-    runDiv = jobRow.find(jobRunSelector);
 
     // YAML callback
     getJSON("/job_run_yaml/" + run.ocid, {}, function (data) {
+      runDiv = jobRow.find(jobRunSelector);
       runDiv.find(".job-yaml").text(data.job_yaml);
       runDiv.find(".job-run-yaml").text(data.job_run_yaml);
       runDiv.find("code").each(function () {

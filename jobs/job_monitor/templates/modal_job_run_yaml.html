@@ -10,16 +10,16 @@
       <div class="modal-body">
         <pre style="overflow-x: scroll;"><code class="language-yaml job-run-yaml"></code></pre>
         <hr>
-        <div class="accordion" id="accordionJobYaml">
+        <div class="accordion" id="accordionJobYaml-{{ run.id|replace('.', '') }}">
           <div class="accordion-item">
             <h2 class="accordion-header" id="headingJobYaml">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                data-bs-target="#collapseJobYaml" aria-expanded="false" aria-controls="collapseJobYaml">
+                data-bs-target="#collapseJobYaml-{{ run.id|replace('.', '') }}">
                 Job YAML - {{ job.name }}
               </button>
             </h2>
-            <div id="collapseJobYaml" class="accordion-collapse collapse" aria-labelledby="headingJobYaml"
-              data-bs-parent="#accordionJobYaml">
+            <div id="collapseJobYaml-{{ run.id|replace('.', '') }}" class="accordion-collapse collapse"
+              data-bs-parent="#accordionJobYaml-{{ run.id|replace('.', '') }}">
               <div class="accordion-body">
                 <pre style="overflow-x: scroll;"><code class="language-yaml job-yaml"></code></pre>
               </div>
