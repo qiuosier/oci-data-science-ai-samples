@@ -43,7 +43,8 @@ from commons.validation import (
 from studio import jobs as studio_jobs
 from studio.models import StudioModel
 from studio.views import studio_views
-from garden.jobs import JobLogManager
+from garden.jobs import JobLogKeeper
+from aqua.views import aqua_views
 
 
 SERVICE_METRICS_NAMESPACE = "oci_datascience_jobrun"
@@ -53,7 +54,7 @@ CUSTOM_METRICS_DIMENSION = metric_query.CUSTOM_METRIC_OCID_DIMENSION
 CACHE_LOCATION = os.path.join(os.path.dirname(__file__), ".cache")
 
 
-job_log_manager = JobLogManager(os.path.join(CACHE_LOCATION, "logs"))
+job_log_manager = JobLogKeeper(os.path.join(CACHE_LOCATION, "logs"))
 
 # Flask templates location
 app = Flask(
