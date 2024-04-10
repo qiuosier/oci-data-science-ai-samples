@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block banner %}
+{% endblock %}
+
+
+{% block banner_end %}
+{% endblock %}
+
+{% block content %}
+<div class="accordion">
+  {% for image, report in group.items() %}
+  {% include 'aqua/image_accordion.html' %}
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  $(document).ready(function () {
+    initWithProfile();
+  });
+</script>
+{% endblock %}

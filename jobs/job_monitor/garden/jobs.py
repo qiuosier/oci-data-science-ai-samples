@@ -1,8 +1,8 @@
-
 import logging
+import json
 import traceback
-
-from ads.jobs import DataScienceJobRun
+import oci
+from ads.jobs import Job, DataScienceJobRun, DataScienceJob
 from commons.auth import get_ds_auth
 from garden.cache import CacheKeeper
 
@@ -23,9 +23,11 @@ def format_logs(logs):
 
 class JobLogKeeper(CacheKeeper):
 
-    def get_from_service(self, job_run_ocid):
-        logger.debug("Getting logs from OCI for %s", job_run_ocid)
-        run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(job_run_ocid)
+    PREFIX = "logs"
+
+    def get_from_service(self, ocid):
+        logger.debug("Getting logs from OCI for %s", ocid)
+        run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(ocid)
         logger.debug(
             "Job Run Status: %s - %s", run.lifecycle_state, run.lifecycle_details
         )
@@ -38,11 +40,67 @@ class JobLogKeeper(CacheKeeper):
             except Exception:
                 traceback.print_exc()
                 logs = []
-        logger.debug("%s - %s log messages.", job_run_ocid, str(len(logs)))
+        logger.debug("%s - %s log messages.", ocid, str(len(logs)))
         return {
-            "ocid": job_run_ocid,
+            "ocid": ocid,
             "logs": logs,
             "status": run.lifecycle_state,
             "statusDetails": run.lifecycle_details,
             "stopped": (run.lifecycle_state in DataScienceJobRun.TERMINAL_STATES),
         }
+
+
+class JobKeeper(CacheKeeper):
+
+    PREFIX = "jobs"
+
+    def get_from_service(self, ocid):
+        logger.debug("Getting job details from OCI for %s", ocid)
+        job = Job(**get_ds_auth(client="ads")).from_datascience_job(ocid)
+        data = job.to_dict()
+        data["stopped"] = True
+        return data
+
+
+class JobRunKeeper(CacheKeeper):
+    PREFIX = "runs"
+
+    def get_from_service(self, ocid):
+        logger.debug("Getting job run from OCI for %s", ocid)
+        run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(ocid)
+        logger.debug(
+            "Job Run Status: %s - %s", run.lifecycle_state, run.lifecycle_details
+        )
+        data = run.to_dict()
+        data["stopped"] = run.lifecycle_state in DataScienceJobRun.TERMINAL_STATES
+        return data
+
+
+class ModelKeeper(CacheKeeper):
+    PREFIX = "models"
+
+    def get_from_service(self, ocid):
+        client = oci.data_science.DataScienceClient(**get_ds_auth())
+        model = client.get_model(ocid).data
+        data = json.loads(str(model))
+        data["stopped"] = True
+        return data
+
+
+class RunListKeeper(CacheKeeper):
+    PREFIX = "run_list"
+
+    def __init__(self, cache_location=None) -> None:
+        super().__init__(cache_location)
+        self.job_keeper = JobKeeper()
+
+    def get_from_service(self, ocid):
+        job_dict = self.job_keeper.get(ocid)
+        job = Job(**get_ds_auth(client="ads")).from_dict(job_dict)
+        job.infrastructure.dsc_job.id = ocid
+        runs = job.run_list()
+        stopped = all(
+            [run.lifecycle_state in DataScienceJobRun.TERMINAL_STATES for run in runs]
+        )
+        data = {"runs": [run.to_dict() for run in runs], "stopped": stopped}
+        return data

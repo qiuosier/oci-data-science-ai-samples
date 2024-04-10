@@ -51,10 +51,9 @@ SERVICE_METRICS_NAMESPACE = "oci_datascience_jobrun"
 SERVICE_METRICS_DIMENSION = "resourceId"
 CUSTOM_METRICS_NAMESPACE_ENV = "OCI__METRICS_NAMESPACE"
 CUSTOM_METRICS_DIMENSION = metric_query.CUSTOM_METRIC_OCID_DIMENSION
-CACHE_LOCATION = os.path.join(os.path.dirname(__file__), ".cache")
 
 
-job_log_manager = JobLogKeeper(os.path.join(CACHE_LOCATION, "logs"))
+job_log_manager = JobLogKeeper()
 
 # Flask templates location
 app = Flask(
@@ -615,3 +614,4 @@ def verify_model(ocid):
 
 
 app.register_blueprint(studio_views, url_prefix="/studio")
+app.register_blueprint(aqua_views, url_prefix="/aqua")

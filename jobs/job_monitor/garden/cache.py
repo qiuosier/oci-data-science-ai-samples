@@ -8,7 +8,14 @@ logger = logging.getLogger(__name__)
 
 class CacheKeeper:
 
-    def __init__(self, cache_location) -> None:
+    PREFIX = ""
+
+    def __init__(self, cache_location=None) -> None:
+        if cache_location is None:
+            if self.PREFIX:
+                cache_location = os.path.join(".cache", self.PREFIX)
+            else:
+                cache_location = ".cache"
         if not os.path.exists(cache_location):
             os.makedirs(cache_location)
         self.cache_location = cache_location

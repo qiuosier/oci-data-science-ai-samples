@@ -1,0 +1,47 @@
+<div class="col-xxl-4">
+  <div class="card run-monitor" style="margin-bottom: 25px;">
+    <div class="card-header">
+      <div>
+        <div class="float-end" style="font-size: larger">
+        </div>
+        <h4>
+          {{ model.name }}
+        </h4>
+      </div>
+    </div>
+
+    <div class="card-body" style="height: 500px; overflow: scroll;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Shape</th>
+            <th>Replica</th>
+            <th>Batch Size</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in model.jobs %}
+          <tr>
+            <td>{{ job.shape }}</td>
+            <td>{{ job.replica }}</td>
+            <td>{{ job.batch_size}} </td>
+            <td>
+              {% if job.status == "SUCCEEDED" %}
+              <i class="bi bi-check-circle-fill text-success"></i>
+              {% elif job.status == "FAILED" %}
+              <i class="bi bi-x-circle-fill text-danger"></i>
+              {% else %}
+              {% endif %}
+              {{ job.status }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer text-muted">
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,18 @@
+<div class="accordion-item" id="report-{{ report.id }}">
+  <h2 class="accordion-header">
+    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+      data-bs-target="#report-{{ report.id }}-body">
+      {{ image }}
+    </button>
+    <div class="d-none report-id">{{ report.id }}</div>
+  </h2>
+  <div id="report-{{ report.id }}-body" class="accordion-collapse collapse">
+    <div class="accordion-body">
+      <div class="row">
+        {% for model in report.models %}
+        {% include 'aqua/model_card.html' %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
