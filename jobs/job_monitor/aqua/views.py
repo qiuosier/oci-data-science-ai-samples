@@ -5,9 +5,10 @@ from typing import Dict, Optional
 import fire
 import oci
 from flask import Blueprint, render_template, jsonify
-from ads.jobs import Job, DataScienceJob, DataScienceJobRun
+from ads.jobs import Job, DataScienceJobRun
 from commons.auth import get_ds_auth
 from commons.components import base_context_with_compartments
+from commons.validation import is_valid_ocid
 from garden.jobs import JobKeeper, RunListKeeper, ModelKeeper
 
 
@@ -28,6 +29,7 @@ def parse_args(**kwargs):
 
 @dataclass
 class FineTuningJob:
+    id: str
     name: str
     model: str
     status: str
@@ -59,10 +61,11 @@ class ModelReport:
         status = run.lifecycle_state
         self.jobs.append(
             FineTuningJob(
+                id=job.id,
                 name=job.name,
                 model=self.name,
                 status=status,
-                shape=job.infrastructure.shape_name,
+                shape=f"{replica}x{job.infrastructure.shape_name}",
                 replica=replica,
                 batch_size=kwargs.get("micro_batch_size", -1),
                 training_data=kwargs.get("training_data", ""),
@@ -94,8 +97,12 @@ class ImageReport:
             model_ocid = json.loads(job.runtime.envs["AIP_SMC_FT_ARGUMENTS"])[
                 "baseModel"
             ]["modelId"]
-            model = model_keeper.get(model_ocid)
-            model_name = model["display_name"]
+
+            if is_valid_ocid("datasciencemodel", model_ocid):
+                model = model_keeper.get(model_ocid)
+                model_name = model["display_name"]
+            else:
+                model_name = model_ocid
         else:
             return
         report = self.reports.get(model_name, ModelReport(name=model_name))
@@ -107,6 +114,8 @@ class ImageGroup(dict):
     """Mapping image name to ImageReport."""
 
     def add_job(self, job):
+        if not hasattr(job.runtime, "image"):
+            return
         # Get the image of the job
         image = job.runtime.image
         # Get existing image report or create new one
@@ -138,7 +147,7 @@ def fine_tune_report():
             compartment_id=compartment_id,
             project_id=project_id,
             lifecycle_state="ACTIVE",
-            limit=10,
+            limit=50,
         ).data
 
         context["group"] = ImageGroup.from_job_summary_list(job_summary_list)

@@ -10,7 +10,9 @@
 {% block content %}
 <div class="accordion">
   {% for image, report in group.items() %}
+  {% if report.models %}
   {% include 'aqua/image_accordion.html' %}
+  {% endif %}
   {% endfor %}
 </div>
 {% endblock %}

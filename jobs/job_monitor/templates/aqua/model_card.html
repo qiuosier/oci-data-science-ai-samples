@@ -14,8 +14,8 @@
       <table class="table">
         <thead>
           <tr>
+            <th>Job</th>
             <th>Shape</th>
-            <th>Replica</th>
             <th>Batch Size</th>
             <th>Status</th>
           </tr>
@@ -23,8 +23,10 @@
         <tbody>
           {% for job in model.jobs %}
           <tr>
+            <td>
+              <pre><a href="/studio/jobs/{{ job.id }}">{{ job.id[-8:] }}</a></pre>
+            </td>
             <td>{{ job.shape }}</td>
-            <td>{{ job.replica }}</td>
             <td>{{ job.batch_size}} </td>
             <td>
               {% if job.status == "SUCCEEDED" %}
