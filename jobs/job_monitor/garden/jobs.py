@@ -1,6 +1,7 @@
 import logging
 import json
 import traceback
+import datetime
 import oci
 from ads.jobs import Job, DataScienceJobRun, DataScienceJob
 from commons.auth import get_ds_auth
@@ -41,12 +42,18 @@ class JobLogKeeper(CacheKeeper):
                 traceback.print_exc()
                 logs = []
         logger.debug("%s - %s log messages.", ocid, str(len(logs)))
+        stopped = (
+            run.lifecycle_state in DataScienceJobRun.TERMINAL_STATES
+            and run.time_finished
+            < datetime.datetime.now(datetime.timezone.utc)
+            - datetime.timedelta(minutes=5)
+        )
         return {
             "ocid": ocid,
             "logs": logs,
             "status": run.lifecycle_state,
             "statusDetails": run.lifecycle_details,
-            "stopped": (run.lifecycle_state in DataScienceJobRun.TERMINAL_STATES),
+            "stopped": stopped,
         }
 
 
@@ -104,3 +111,7 @@ class RunListKeeper(CacheKeeper):
         )
         data = {"runs": [run.to_dict() for run in runs], "stopped": stopped}
         return data
+    
+
+class ArgsKeeper(CacheKeeper):
+    PREFIX = "args"
