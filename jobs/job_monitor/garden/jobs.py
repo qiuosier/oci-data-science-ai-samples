@@ -45,6 +45,7 @@ class JobLogKeeper(CacheKeeper):
         stopped = (
             run.lifecycle_state in DataScienceJobRun.TERMINAL_STATES
             and run.time_finished
+            and run.time_finished
             < datetime.datetime.now(datetime.timezone.utc)
             - datetime.timedelta(minutes=5)
         )
@@ -111,7 +112,7 @@ class RunListKeeper(CacheKeeper):
         )
         data = {"runs": [run.to_dict() for run in runs], "stopped": stopped}
         return data
-    
+
 
 class ArgsKeeper(CacheKeeper):
     PREFIX = "args"
