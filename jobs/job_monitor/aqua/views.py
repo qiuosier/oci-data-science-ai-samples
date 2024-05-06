@@ -1,10 +1,10 @@
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict
 import fire
 import oci
-from flask import Blueprint, render_template, jsonify
+from flask import Blueprint, render_template
 from ads.jobs import Job, DataScienceJobRun
 from commons.auth import get_ds_auth
 from commons.components import base_context_with_compartments
@@ -165,4 +165,22 @@ def ft_report_images():
 
 @aqua_views.route("/fine_tune/report/models")
 def ft_report_models():
-    pass
+    context = base_context_with_compartments()
+    context["title"] = "AQUA FT Models"
+    compartment_id = context["compartment_id"]
+    project_id = context["project_id"]
+    if compartment_id and project_id:
+        client = oci.data_science.DataScienceClient(**get_ds_auth())
+        job_summary_list = client.list_jobs(
+            compartment_id=compartment_id,
+            project_id=project_id,
+            lifecycle_state="ACTIVE",
+            limit=75,
+        ).data
+
+        context["report"] = FineTuningReport.from_job_summary_list(
+            job_summary_list
+        ).group_by("model", "image_version")
+        context["headers"] = ["shape", "batch_size", "sequence_len"]
+
+    return render_template("aqua/ft_report.html", **context)
