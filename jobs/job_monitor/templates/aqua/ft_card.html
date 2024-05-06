@@ -5,7 +5,7 @@
         <div class="float-end" style="font-size: larger">
         </div>
         <h4>
-          {{ model.name }}
+          {{ card.name }}
         </h4>
       </div>
     </div>
@@ -15,19 +15,21 @@
         <thead>
           <tr>
             <th>Job</th>
-            <th>Shape</th>
-            <th>Batch Size</th>
+            {% for header in headers %}
+            <th>{{ header }}</th>
+            {% endfor %}
             <th>Status</th>
           </tr>
         </thead>
         <tbody>
-          {% for job in model.jobs %}
+          {% for job in card.rows %}
           <tr>
             <td>
               <pre><a href="/studio/jobs/{{ job.id }}">{{ job.id[-8:] }}</a></pre>
             </td>
-            <td>{{ job.shape }}</td>
-            <td>{{ job.batch_size}} </td>
+            {% for header in headers %}
+            <td>{{ job[header] }}</td>
+            {% endfor %}
             <td>
               {% if job.status == "SUCCEEDED" %}
               <i class="bi bi-check-circle-fill text-success"></i>

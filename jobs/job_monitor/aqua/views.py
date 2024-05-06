@@ -10,6 +10,7 @@ from commons.auth import get_ds_auth
 from commons.components import base_context_with_compartments
 from commons.validation import is_valid_ocid
 from garden.jobs import JobKeeper, RunListKeeper, ModelKeeper
+from aqua.reports import FineTuningReport
 
 
 aqua_views = Blueprint("aqua", __name__, template_folder="templates")
@@ -38,6 +39,7 @@ class FineTuningJob:
     batch_size: int
     training_data: str
     val_set_size: float
+    sequence_len: int
     # output_dir: str
     # epoch: int
     # learning_rate: float
@@ -54,6 +56,8 @@ class ModelReport:
     def add_job(self, job: Job):
         kwargs = fire.Fire(parse_args, command=job.runtime.envs["OCI__LAUNCH_CMD"])
         runs = run_list_keeper.get(job.id)["runs"]
+        if not runs:
+            return
         run = DataScienceJobRun(**get_ds_auth(client="ads")).from_dict(runs[0])
         replica = run.job_configuration_override_details.environment_variables.get(
             "NODE_COUNT", 1
@@ -70,6 +74,7 @@ class ModelReport:
                 batch_size=kwargs.get("micro_batch_size", -1),
                 training_data=kwargs.get("training_data", ""),
                 val_set_size=kwargs.get("val_set_size", -1),
+                sequence_len=kwargs.get("sequence_len", 2048),
             )
         )
 
@@ -135,10 +140,10 @@ class ImageGroup(dict):
         return group
 
 
-@aqua_views.route("/fine_tune/report")
-def fine_tune_report():
+@aqua_views.route("/fine_tune/report/images")
+def ft_report_images():
     context = base_context_with_compartments()
-    context["title"] = "AQUA FT Jobs"
+    context["title"] = "AQUA FT Images"
     compartment_id = context["compartment_id"]
     project_id = context["project_id"]
     if compartment_id and project_id:
@@ -150,6 +155,14 @@ def fine_tune_report():
             limit=50,
         ).data
 
-        context["group"] = ImageGroup.from_job_summary_list(job_summary_list)
+        context["report"] = FineTuningReport.from_job_summary_list(
+            job_summary_list
+        ).group_by("image_version", "model")
+        context["headers"] = ["shape", "batch_size", "sequence_len"]
 
-    return render_template("aqua_ft_report.html", **context)
+    return render_template("aqua/ft_report.html", **context)
+
+
+@aqua_views.route("/fine_tune/report/models")
+def ft_report_models():
+    pass

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block banner %}
+{% endblock %}
+
+
+{% block banner_end %}
+{% endblock %}
+
+{% block content %}
+<div class="accordion">
+  {% for accordion_key, accordion in report.items() %}
+  {% if accordion.cards %}
+  {% include 'aqua/ft_accordion.html' %}
+  {% endif %}
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  $(document).ready(function () {
+    initWithProfile();
+  });
+</script>
+{% endblock %}
