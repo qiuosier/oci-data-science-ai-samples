@@ -31,8 +31,7 @@ pip install oci oracle-ads flask --upgrade
 
 ### Command Line
 
-This tool uses OCI API key for authentication. The `DEFAULT` profile in the API key will be used.
-If you would like to use a different profile, you can specify it with the `OCI_KEY_PROFILE` environment variable
+This tool uses OCI API key or security token for authentication. Make sure your OCI config file (located at `~/.oci/config` by default) has at least one profile before starting the app. The `DEFAULT` profile will be used. If you would like to use a different profile, you can specify it with the `OCI_KEY_PROFILE` environment variable or select it from the UI dropdown once the app is started.
 To start the Flask app, simply run the following command and open <http://127.0.0.1:5000/> with your browser.
 
 ```bash
@@ -60,6 +59,24 @@ Alternatively, you can specify the compartment OCID and project OCID in the URL:
 http://127.0.0.1:5000/<COMPARTMENT_OCID>/<PROJECT_OCID>
 ```
 
+### Extra configurations
+
+You may add extra key value pairs to `~/.oci/config.json` as configurations for a profile. These configurations will be used as the context (for the YAML template) when starting a job from YAML. Here is an example of the `~/.oci/config.json`, where `DEV` is the profile name matching the one in `~/.oci/config`:
+
+```
+{
+    "DEV": {
+        "name": "dev - prod - Ashburn",
+        "override_tenancy": "ocid1.tenancy.oc1..xxx",
+        "compartment_id": "ocid1.compartment.oc1..xxx",
+        "log_group_id": "ocid1.loggroup.oc1.iad.xxx",
+        "log_id": "ocid1.log.oc1.iad.xxx",
+        "project_id": "ocid1.datascienceproject.oc1.iad.xxx",
+        "subnet_id": "ocid1.subnet.oc1.iad.xxx",
+        "namespace": "oci"
+    }
+}
+```
 
 ### VS Code Launch Config
 
