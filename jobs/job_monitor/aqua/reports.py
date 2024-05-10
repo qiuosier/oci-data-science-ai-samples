@@ -1,7 +1,7 @@
 import json
 import re
 import traceback
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Dict
 import fire
 from ads.jobs import Job, DataScienceJobRun
@@ -121,9 +121,9 @@ class FineTuningReport:
                 status=status,
                 shape=f"{replica}x{job.infrastructure.shape_name}",
                 replica=replica,
-                batch_size=kwargs.get("micro_batch_size", -1),
+                batch_size=kwargs.get("micro_batch_size", 1),
                 training_data=kwargs.get("training_data", ""),
-                val_set_size=kwargs.get("val_set_size", -1),
+                val_set_size=kwargs.get("val_set_size", 0.1),
                 sequence_len=kwargs.get("sequence_len", 2048),
                 image_version=image_version,
             )
@@ -159,3 +159,12 @@ class FineTuningReport:
         for _, accordion in accordions.items():
             accordion.cards = dict(sorted(accordion.cards.items()))
         return dict(sorted(accordions.items(), reverse=True))
+
+    def save_html(self, filename):
+        import report_creator as rc
+
+        data = [asdict(job) for job in self.jobs]
+
+        with rc.ReportCreator("AQUA FT Tests Report") as report:
+            view = rc.Block(rc.DataTable(data))
+            report.save(view, filename)
