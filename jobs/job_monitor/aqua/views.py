@@ -1,7 +1,8 @@
 import oci
 from flask import Blueprint, render_template
 from commons.auth import get_ds_auth
-from commons.components import base_context_with_compartments
+from commons.components import base_context_with_compartments, base_context
+from commons.validation import check_ocid
 from aqua.reports import FineTuningReport
 
 
@@ -43,7 +44,7 @@ def ft_report_models():
             compartment_id=compartment_id,
             project_id=project_id,
             lifecycle_state="ACTIVE",
-            limit=75,
+            limit=150,
         ).data
 
         report = FineTuningReport.from_job_summary_list(job_summary_list)
@@ -52,3 +53,13 @@ def ft_report_models():
         context["headers"] = ["shape", "batch_size", "sequence_len"]
 
     return render_template("aqua/ft_report.html", **context)
+
+
+@aqua_views.route("/fine_tune/jobs/<ocid>")
+def ft_job(ocid):
+    if ocid:
+        check_ocid(ocid)
+    context = base_context()
+    context["title"] = "Job"
+    context["ocid"] = ocid
+    return render_template("view_job.html", **context)

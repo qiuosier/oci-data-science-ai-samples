@@ -219,10 +219,7 @@ def delete_resource(ocid):
     elif is_valid_ocid("datasciencejobrun", ocid):
         run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(ocid)
         try:
-            if run.status not in run.TERMINAL_STATES:
-                run.cancel()
-                logger.info("Cancelled Job Run: %s", ocid)
-            run.delete()
+            run.delete(force_delete=True)
             error = None
             logger.info("Deleted Job Run: %s", ocid)
         except oci.exceptions.ServiceError as ex:
@@ -331,6 +328,46 @@ def get_custom_metrics_namespace(job_run):
     return job_envs.get(CUSTOM_METRICS_NAMESPACE_ENV)
 
 
+def get_log_metrics_names(ocid):
+    logs = job_log_manager.get(ocid).get("logs")
+    is_aqua_ft = any(["aqua_fine_tune.cli train" in log for log in logs])
+    if is_aqua_ft:
+        return ["Loss", "Accuracy"]
+    return []
+
+
+def get_log_metrics(ocid):
+    logs = job_log_manager.get(ocid).get("logs")
+    is_aqua_ft = any(["aqua_fine_tune.cli train" in log for log in logs])
+    if not is_aqua_ft:
+        return {}
+    data = []
+    for log in logs:
+        if "accuracy" not in log or "loss" not in log or "epoch" not in log:
+            continue
+        try:
+            data.append(
+                json.loads(str(log).split(" ", maxsplit=2)[-1].replace("'", '"'))
+            )
+        except Exception:
+            continue
+
+    metrics = {}
+    keys = ["loss", "eval_loss", "accuracy", "eval_accuracy"]
+    for line in data:
+        epoch = line.get("epoch")
+        epoch_metrics = metrics.get(epoch, {})
+        for key in keys:
+            if key not in line:
+                continue
+            val = line.get(key)
+            epoch_metrics[key] = val
+        metrics[epoch] = epoch_metrics
+
+    print(json.dumps(metrics, indent=2))
+    return metrics
+
+
 def get_metrics_list(ocid):
     job_run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(ocid)
     custom_metric_namespace = get_custom_metrics_namespace(job_run)
@@ -351,7 +388,8 @@ def get_metrics_list(ocid):
         )
     else:
         custom_metrics = []
-    metrics = service_metrics + custom_metrics
+
+    metrics = get_log_metrics_names(ocid) + service_metrics + custom_metrics
     if "gpu.gpu_utilization" in metrics and "GpuUtilization" in metrics:
         metrics.remove("GpuUtilization")
     metric_display_name = {
@@ -382,7 +420,38 @@ def list_metrics(ocid):
 
 
 @app.route("/metrics/<name>/<ocid>")
-def get_metrics(name, ocid):
+def get_metrics(name: str, ocid):
+    if name in ["Loss", "Accuracy"]:
+        metrics = get_log_metrics(ocid)
+        data = []
+        for epoch, metric in metrics.items():
+            data.append(
+                (
+                    epoch,
+                    {k: v for k, v in metric.items() if name.lower() in k},
+                )
+            )
+        if not data:
+            return jsonify(
+                {
+                    "metrics": get_metrics_list(ocid),
+                    "timestamps": [],
+                    "datasets": [],
+                }
+            )
+        sorted(data, key=lambda x: x[0])
+        timestamps = [p[0] for p in data]
+        labels = data[0][1].keys()
+        datasets = []
+        for label in labels:
+            datasets.append({"label": label, "data": [p[1].get(label) for p in data]})
+        return jsonify(
+            {
+                "metrics": get_metrics_list(ocid),
+                "timestamps": timestamps,
+                "datasets": datasets,
+            }
+        )
     job_run = DataScienceJobRun(**get_ds_auth(client="ads")).from_ocid(ocid)
     if name.startswith("gpu"):
         metric_namespace = get_custom_metrics_namespace(job_run)

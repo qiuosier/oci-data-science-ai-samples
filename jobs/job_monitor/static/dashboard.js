@@ -416,6 +416,7 @@ function updateMetrics(ocid) {
     if (chart === undefined) {
       // Create a new chart
       // this is called when the panel is initialized for the first time
+      console.log(data);
       newChart(ctx, data.timestamps, data.datasets);
     } else {
       // Update the data for the existing chart
@@ -554,6 +555,7 @@ function metricDropdownClicked(element) {
   // Update the metric chart
   getJSON("/metrics/" + metricLink.data("val") + "/" + ocid, {}, function (data) {
     var chart = Chart.getChart(canvasId);
+    console.log(data);
     chart.data.labels = data.timestamps;
     chart.data.datasets = data.datasets;
     chart.update();

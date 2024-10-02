@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="input-group mb-3">
+  <span class="input-group-text">OCID</span>
+  <input id="query-ocid" type="text" class="form-control" value="{{ ocid }}">
+  <!-- Button trigger modal -->
+  <button type="button" class="btn btn-primary" onclick="showJobRuns()">
+    <i title="Show Job Runs" class="bi-arrow-right-circle"></i>
+  </button>
+</div>
+<div id="job-row" , class="row">
+  Loading...
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  $(document).ready(function () {
+    initWithProfile(function () {
+      var ocid = $("#query-ocid").val()
+      if (ocid !== "") loadJobRuns("/studio/api/runs/" + ocid, $("#job-row"));
+      else $("#job-row").text("");
+    });
+  });
+  function showJobRuns() {
+    window.location.href = "aqua/fine_tune/jobs/" + $("#query-ocid").val();
+  }
+</script>
+{% endblock %}
