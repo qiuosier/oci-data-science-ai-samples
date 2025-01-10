@@ -2,7 +2,8 @@ import json
 import re
 import traceback
 from dataclasses import dataclass, field, asdict
-from typing import Dict
+from typing import Dict, List, Optional
+
 import fire
 from ads.jobs import Job, DataScienceJobRun
 from commons.auth import get_ds_auth
@@ -26,6 +27,7 @@ def make_id(s):
 @dataclass
 class FineTuningJob:
     id: str
+    run_id: str
     name: str
     model: str
     status: str
@@ -39,6 +41,8 @@ class FineTuningJob:
     # epoch: int
     # learning_rate: float
     image_version: str
+    duration: Optional[str] = None
+    exit_code: Optional[int] = None
 
 
 class IncompatibleJob(Exception):
@@ -67,7 +71,7 @@ class Accordion:
 
 class FineTuningReport:
     def __init__(self) -> None:
-        self.jobs = []
+        self.jobs: List[FineTuningJob] = []
 
     @staticmethod
     def get_image_version(job):
@@ -78,7 +82,7 @@ class FineTuningReport:
         if ":" not in image:
             raise IncompatibleJob()
 
-        return str(image).split(":", 1)[-1]
+        return str(image).rsplit(":", 1)[-1]
 
     @staticmethod
     def get_model_name(job):
@@ -107,15 +111,25 @@ class FineTuningReport:
         runs = run_list_keeper.get(job.id)["runs"]
         if not runs:
             return
-        run = DataScienceJobRun(**get_ds_auth(client="ads")).from_dict(runs[0])
-        replica = run.job_configuration_override_details.environment_variables.get(
-            "NODE_COUNT", 1
+        # TODO: Find the job run with rank 0
+        run: DataScienceJobRun = DataScienceJobRun(
+            **get_ds_auth(client="ads")
+        ).from_dict(runs[0])
+        replica = int(
+            run.job_configuration_override_details.environment_variables.get(
+                "NODE_COUNT", 1
+            )
         )
         status = run.lifecycle_state
+        if run.time_finished and run.time_started:
+            duration = str((run.time_finished - run.time_started).total_seconds() / 60)
+        else:
+            duration = "N/A"
 
         self.jobs.append(
             FineTuningJob(
                 id=job.id,
+                run_id=run.id,
                 name=job.name,
                 model=model_name,
                 status=status,
@@ -126,6 +140,8 @@ class FineTuningReport:
                 val_set_size=kwargs.get("val_set_size", 0.1),
                 sequence_len=kwargs.get("sequence_len", 2048),
                 image_version=image_version,
+                duration=duration,
+                exit_code=run.exit_code,
             )
         )
 
@@ -160,11 +176,23 @@ class FineTuningReport:
             accordion.cards = dict(sorted(accordion.cards.items()))
         return dict(sorted(accordions.items(), reverse=True))
 
-    def save_html(self, filename):
-        import report_creator as rc
+    def save_html_table(self, filename):
+        from .html_report import FineTuningReportCreator
 
-        data = [asdict(job) for job in self.jobs]
+        FineTuningReportCreator().save_table(self.jobs, filename)
 
-        with rc.ReportCreator("AQUA FT Tests Report") as report:
-            view = rc.Block(rc.DataTable(data))
-            report.save(view, filename)
+    def save_report(self, version: str, accordion: Accordion, filename: str):
+        from .html_report import FineTuningReportCreator
+
+        FineTuningReportCreator().save_version_report(version, accordion, filename)
+
+    def save_reports(self, data: Dict[str, Accordion], filename_prefix: str):
+        is_latest = True
+        for version, accordion in data.items():
+            filename = f"{filename_prefix}{version}.html"
+            self.save_report(version, accordion, filename)
+            if is_latest:
+                filename = f"{filename_prefix}latest.html"
+                self.save_report(version, accordion, filename)
+            is_latest = False
+            break

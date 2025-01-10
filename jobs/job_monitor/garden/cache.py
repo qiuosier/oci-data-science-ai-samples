@@ -20,7 +20,7 @@ class CacheKeeper:
             os.makedirs(cache_location)
         self.cache_location = cache_location
 
-    def _get_cache_path(self, ocid):
+    def _get_cache_path(self, ocid) -> str:
         return os.path.join(self.cache_location, f"{ocid}.json")
 
     def save_to_cache(self, ocid, context):
@@ -28,7 +28,7 @@ class CacheKeeper:
         with open(cache_file, "w", encoding="utf-8") as f:
             json.dump(context, f)
 
-    def get_from_cache(self, ocid):
+    def get_from_cache(self, ocid) -> dict:
         cache_file = self._get_cache_path(ocid)
         if os.path.exists(cache_file):
             logger.debug("Getting from cache for %s", ocid)
@@ -36,10 +36,10 @@ class CacheKeeper:
                 return json.load(f)
         return None
 
-    def get_from_service(self, ocid):
+    def get_from_service(self, ocid) -> dict:
         raise NotImplementedError()
 
-    def get(self, ocid):
+    def get(self, ocid) -> dict:
         context = self.get_from_cache(ocid)
         if context is None:
             context = self.get_from_service(ocid)

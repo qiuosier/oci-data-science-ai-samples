@@ -1,3 +1,6 @@
+import os
+import traceback
+
 import oci
 from flask import Blueprint, render_template
 from commons.auth import get_ds_auth
@@ -23,10 +26,17 @@ def ft_report_images():
             lifecycle_state="ACTIVE",
             limit=50,
         ).data
+        report = FineTuningReport.from_job_summary_list(job_summary_list)
+        context["report"] = report.group_by("image_version", "model")
+        if os.environ.get("REPORT_PREFIX"):
+            try:
+                report.save_reports(
+                    context["report"],
+                    filename_prefix=(os.environ.get("REPORT_PREFIX")),
+                )
+            except Exception:
+                traceback.print_exc()
 
-        context["report"] = FineTuningReport.from_job_summary_list(
-            job_summary_list
-        ).group_by("image_version", "model")
         context["headers"] = ["shape", "batch_size", "sequence_len"]
 
     return render_template("aqua/ft_report.html", **context)
@@ -48,7 +58,7 @@ def ft_report_models():
         ).data
 
         report = FineTuningReport.from_job_summary_list(job_summary_list)
-        report.save_html("ft_report.html")
+        report.save_html_table("ft_job_data_table.html")
         context["report"] = report.group_by("model", "image_version")
         context["headers"] = ["shape", "batch_size", "sequence_len"]
 
